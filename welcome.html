@@ -1,67 +1,65 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Welcome</title>
-    <style>
-      body {
-        margin: 0;
-        background: #070b14;
-        color: white;
-        font-family: Arial, sans-serif;
-      }
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Welcome</title>
+  <style>
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      background: #070b14;
+      color: #eef6ff;
+      font-family: Arial, sans-serif;
+    }
+    main {
+      width: min(480px, 88vw);
+      padding: 36px;
+      text-align: center;
+      background: #111827;
+      border: 1px solid #243244;
+      border-radius: 20px;
+    }
+    a, button {
+      display: inline-block;
+      margin: 12px 6px 0;
+      padding: 12px 18px;
+      border: 0;
+      border-radius: 10px;
+      background: #2563eb;
+      color: white;
+      font-weight: bold;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    button { background: #333; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1 id="greeting">Welcome!</h1>
+    <p>You’re logged in. Your workspace is ready.</p>
+    <a href="/dashboard">Go to Dashboard</a>
+    <form action="/logout" method="POST">
+      <button type="submit">Log out</button>
+    </form>
+  </main>
 
-      .page {
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        padding: 24px;
-      }
-
-      .card {
-        width: min(540px, 100%);
-        background: #101827;
-        border: 1px solid #243244;
-        border-radius: 20px;
-        padding: 32px;
-        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-      }
-
-      h1 {
-        margin: 0 0 12px;
-      }
-
-      p {
-        margin: 0 0 24px;
-        color: #a9b8ce;
-      }
-
-      .logout-button {
-        background: #2563eb;
-        border: none;
-        color: white;
-        border-radius: 12px;
-        padding: 12px 18px;
-        font-weight: 700;
-        cursor: pointer;
-      }
-
-      .logout-button:hover {
-        background: #1d4ed8;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="page">
-      <div class="card">
-        <h1>Welcome</h1>
-        <p>You are logged in and ready to use your workspace.</p>
-
-        <form action="/logout" method="POST">
-          <button class="logout-button" type="submit">Log out</button>
-        </form>
-      </div>
-    </div>
-  </body>
+  <script>
+    fetch("/api/me")
+      .then((response) => {
+        if (!response.ok) throw new Error("Could not load your account.");
+        return response.json();
+      })
+      .then((user) => {
+        document.getElementById("greeting").textContent =
+          `Welcome, ${user.name}!`;
+      })
+      .catch(() => {
+        window.location.replace("/");
+      });
+  </script>
+</body>
 </html>

@@ -108,6 +108,10 @@ app.get("/dashboard", requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, "dashboard.html"));
 });
 
+app.get("/welcome", requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, "welcome.html"));
+});
+
 app.post("/register", async (req, res) => {
   const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
   const email = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : "";
@@ -178,6 +182,24 @@ app.post("/logout", (req, res) => {
     res.clearCookie("connect.sid");
     res.redirect("/");
   });
+});
+
+app.get("/api/me", requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT name FROM users WHERE id = $1",
+      [req.session.userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    res.json({ name: result.rows[0].name });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Could not load your profile." });
+  }
 });
 
 app.get("/api/projects", requireAuth, async (req, res) => {
