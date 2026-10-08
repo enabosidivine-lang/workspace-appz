@@ -1,0 +1,116 @@
+:root {
+  --muted: #a1a1aa;
+  --panel: #0b0b0b;
+  --border: #292929;
+  --shadow: 0 16px 45px rgba(0, 0, 0, 0.35);
+  --panel-alt: #111827;
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  --green: #22c55e;
+  --red: #ef4444;
+}
+
+body {
+  isolation: isolate;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: -30%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 25% 35%, rgba(37, 99, 235, 0.19), transparent 38%),
+    radial-gradient(ellipse at 75% 65%, rgba(29, 78, 216, 0.13), transparent 35%);
+  filter: blur(24px);
+  animation: ambient-drift 16s ease-in-out infinite alternate;
+}
+
+.app,
+.container,
+.welcome-card {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes ambient-drift {
+  from { transform: translate3d(-2%, -1%, 0) scale(0.98); }
+  to { transform: translate3d(2%, 1%, 0) scale(1.04); }
+}
+
+@keyframes fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(37, 99, 235, 0); }
+  50% { box-shadow: 0 0 24px rgba(37, 99, 235, 0.18); }
+}
+
+.container,
+.welcome-card,
+.stat-card,
+.panel {
+  animation: fade-rise 650ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+button,
+a.option,
+.logout,
+.nav-item {
+  transition:
+    transform 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+button:hover,
+a.option:hover {
+  transform: translateY(-2px);
+}
+
+button:active,
+a.option:active {
+  transform: translateY(0) scale(0.98);
+}
+
+input {
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.stat-card:hover,
+.panel:hover {
+  transform: translateY(-3px);
+  border-color: rgba(59, 130, 246, 0.55);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45), 0 0 22px rgba(37, 99, 235, 0.1);
+}
+
+.stat-card,
+.panel {
+  transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+}
+
+.nav-item:hover {
+  transform: translateX(4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

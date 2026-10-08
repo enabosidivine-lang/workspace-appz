@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: workspace-app
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: workspace-db
+          property: connectionString
+
+databases:
+  - name: workspace-db
+    plan: free
+    databaseName: workspace
+    user: workspace_user

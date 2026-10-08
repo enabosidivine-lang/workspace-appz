@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login & Register</title>
+    <style>
+      :root {
+        --bg: #070b14;
+        --panel: #111827;
+        --panel-alt: #0f172a;
+        --border: #243244;
+        --text: #eef6ff;
+        --muted: #a9b8ce;
+        --primary: #2563eb;
+        --primary-dark: #1d4ed8;
+        --success: #22c55e;
+        --danger: #ef4444;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(circle at top, rgba(37, 99, 235, 0.18), transparent 35%), var(--bg);
+        color: var(--text);
+        font-family: Arial, sans-serif;
+      }
+
+      .container {
+        width: min(980px, 92vw);
+        display: grid;
+        grid-template-columns: 1.1fr 1fr;
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        overflow: hidden;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+      }
+
+      .welcome-panel {
+        padding: 42px 38px;
+        background: linear-gradient(135deg, rgba(37,99,235,0.18), rgba(15,23,42,0.9));
+      }
+
+      .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+      .brand-mark {
+        width: 42px; height: 42px; border-radius: 12px; background: linear-gradient(135deg, #60a5fa, #2563eb);
+        display: grid; place-items: center; font-weight: bold;
+      }
+
+      .welcome-panel h1 {
+        margin: 0 0 12px;
+        font-size: clamp(2rem, 4vw, 3.2rem);
+      }
+
+      .welcome-panel p {
+        margin: 0 0 22px;
+        color: var(--muted);
+        line-height: 1.6;
+        max-width: 34ch;
+      }
+
+      .feature-list { display: grid; gap: 12px; }
+      .feature {
+        display: flex; align-items: center; gap: 12px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(148, 163, 184, 0.15);
+        border-radius: 12px;
+        padding: 12px 14px;
+      }
+
+      .checkmark {
+        width: 24px; height: 24px; border-radius: 50%;
+        background: rgba(34, 197, 94, 0.14); color: var(--success);
+        display: grid; place-items: center; font-weight: bold;
+      }
+
+      .auth-panel {
+        padding: 26px 28px;
+        background: rgba(11, 18, 32, 0.88);
+      }
+
+      form {
+        display: grid;
+        gap: 12px;
+      }
+
+      input {
+        width: 100%;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(15, 23, 42, 0.7);
+        color: var(--text);
+      }
+
+      input::placeholder { color: #8da0ba; }
+
+      button {
+        border: none;
+        border-radius: 12px;
+        padding: 12px 16px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .primary {
+        background: var(--primary);
+        color: white;
+      }
+
+      .primary:hover { background: var(--primary-dark); }
+
+      @media (max-width: 820px) {
+        .container { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="welcome-panel">
+        <div class="brand">
+          <div class="brand-mark">W</div>
+          <h2>Workspace</h2>
+        </div>
+
+        <h1>Turn ideas into momentum.</h1>
+        <p>
+          Track projects, manage tasks, and stay focused with a clean workspace built for your goals.
+        </p>
+
+        <div class="feature-list">
+          <div class="feature"><span class="checkmark">✓</span> Organize projects with clear progress tracking</div>
+          <div class="feature"><span class="checkmark">✓</span> Manage tasks across every stage</div>
+          <div class="feature"><span class="checkmark">✓</span> Stay focused with a simple, fast dashboard</div>
+        </div>
+      </div>
+
+      <div class="auth-panel">
+        <div class="auth-card">
+          <h3>Log in</h3>
+          <form id="loginForm">
+            <input id="login-email" type="email" placeholder="Email" required />
+            <input id="login-password" type="password" placeholder="Password" required />
+            <button class="primary" type="submit">Log in</button>
+          </form>
+        </div>
+
+        <div class="auth-card">
+          <h3>Create account</h3>
+          <form id="registerForm">
+            <input id="reg-name" type="text" placeholder="Full name" required />
+            <input id="reg-email" type="email" placeholder="Email" required />
+            <input id="reg-password" type="password" placeholder="Password (8+ chars)" minlength="8" required />
+            <button class="primary" type="submit">Create account</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const loginForm = document.getElementById("loginForm");
+      const registerForm = document.getElementById("registerForm");
+
+      loginForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const email = document.getElementById("login-email").value.trim();
+        const password = document.getElementById("login-password").value;
+
+        const response = await fetch("/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          alert(result.message || "Login failed.");
+          return;
+        }
+
+        window.location.href = "/dashboard";
+      });
+
+      registerForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const name = document.getElementById("reg-name").value.trim();
+        const email = document.getElementById("reg-email").value.trim();
+        const password = document.getElementById("reg-password").value;
+
+        const response = await fetch("/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email, password })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          alert(result.message || "Registration failed.");
+          return;
+        }
+
+        window.location.href = "/dashboard";
+      });
+    </script>
+  </body>
+</html>

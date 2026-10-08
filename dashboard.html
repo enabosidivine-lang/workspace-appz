@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Project Dashboard</title>
+    <style>
+      :root {
+        --panel: #0b0b0b;
+        --border: #292929;
+        --muted: #a1a1aa;
+        --primary: #2563eb;
+        --primary-dark: #1d4ed8;
+        --shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+        --green: #22c55e;
+        --red: #ef4444;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        color: #f8fafc;
+        background: #000;
+        font-family: Arial, sans-serif;
+      }
+
+      .app { display: flex; min-height: 100vh; }
+      .sidebar {
+        width: 250px;
+        background: #050505;
+        border-right: 1px solid #222;
+        padding: 28px 18px;
+      }
+      .brand {
+        display: flex; align-items: center; gap: 12px; margin-bottom: 30px;
+      }
+      .brand-mark {
+        width: 42px; height: 42px; border-radius: 12px;
+        background: linear-gradient(135deg, #60a5fa, #2563eb);
+        display: flex; align-items: center; justify-content: center; font-weight: bold;
+      }
+      .brand h2 { margin: 0; font-size: 1.2rem; }
+
+      .nav { display: flex; flex-direction: column; gap: 8px; }
+      .nav-item {
+        display: flex; align-items: center; gap: 12px;
+        padding: 12px 14px; border-radius: 12px;
+        color: #dbeafe; text-decoration: none;
+      }
+      .nav-item.active, .nav-item:hover { background: rgba(59, 130, 246, 0.2); }
+      .nav-icon {
+        width: 8px; height: 8px; border-radius: 50%; background: #93c5fd;
+      }
+
+      .sidebar-card {
+        margin-top: 28px; background: #0b0b0b; border: 1px solid #292929; border-radius: 16px; padding: 18px 16px;
+      }
+      .sidebar-card h4 { margin: 0 0 8px; }
+      .sidebar-card p { margin: 0; color: #cbd5e1; font-size: 0.85rem; line-height: 1.5; }
+
+      .main {
+        flex: 1; padding: 26px 32px 32px; background: #000;
+      }
+
+      .topbar {
+        display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px;
+      }
+      .greeting h1 { margin: 0; font-size: 2rem; }
+      .greeting p { margin: 6px 0 0; color: var(--muted); }
+
+      .top-actions {
+        display: flex; align-items: center; gap: 14px;
+      }
+      .search {
+        background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+        padding: 10px 14px; min-width: 220px; color: var(--muted);
+      }
+      .primary-btn {
+        border: none; background: var(--primary); color: white; padding: 11px 18px; border-radius: 12px;
+        font-weight: 700; cursor: pointer;
+      }
+      .primary-btn:hover { background: var(--primary-dark); }
+
+      .logout-form { margin: 0; }
+      .logout-button {
+        border: 1px solid #333; border-radius: 12px; padding: 11px 18px; color: #f8fafc;
+        background: #111; font-weight: 700; cursor: pointer;
+      }
+
+      .stats {
+        display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 18px; margin-bottom: 26px;
+      }
+      .stat-card {
+        background: var(--panel); border: 1px solid var(--border); border-radius: 18px;
+        padding: 18px 20px; box-shadow: var(--shadow);
+      }
+      .stat-top { display: flex; justify-content: space-between; align-items: center; }
+      .stat-label { color: var(--muted); font-size: 0.86rem; }
+      .stat-icon {
+        width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+        font-weight: bold; color: white;
+      }
+      .blue { background: #2563eb; }
+      .purple { background: #8b5cf6; }
+      .green { background: #10b981; }
+      .orange { background: #f59e0b; }
+
+      .stat-value { margin-top: 18px; font-size: 1.9rem; font-weight: bold; }
+      .stat-change { margin-top: 8px; font-size: 0.8rem; }
+      .up { color: var(--green); }
+      .down { color: var(--red); }
+
+      .content {
+        display: grid; grid-template-columns: 2fr 1fr; gap: 24px;
+      }
+
+      .panel {
+        background: var(--panel); border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow); padding: 22px;
+      }
+      .panel-header {
+        display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
+      }
+      .panel-header h3 { margin: 0; }
+
+      .pill {
+        background: #111827; color: var(--primary); border-radius: 999px; padding: 8px 12px; font-size: 0.75rem; font-weight: bold;
+      }
+
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 13px 8px; border-bottom: 1px solid var(--border); }
+      th { color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
+      td { font-size: 0.95rem; }
+
+      .project-progress, .project-status {
+        max-width: 130px; padding: 8px; color: #f8fafc; background: #111; border: 1px solid #333; border-radius: 8px;
+      }
+
+      .right-column { display: flex; flex-direction: column; gap: 24px; }
+
+      .progress-box { display: flex; flex-direction: column; align-items: center; }
+      .circle {
+        width: 130px; height: 130px; border-radius: 50%;
+        background: conic-gradient(var(--primary) 0 72%, #e2e8f0 72% 100%);
+        display: flex; align-items: center; justify-content: center; margin: 10px 0 18px;
+      }
+      .circle-inner {
+        width: 90px; height: 90px; background: #111; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.3rem;
+      }
+
+      .mini-list { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; }
+      .mini-item {
+        display: flex; align-items: center; justify-content: space-between; background: #111; border: 1px solid var(--border);
+        border-radius: 12px; padding: 12px 14px;
+      }
+      .tag {
+        padding: 6px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: bold;
+      }
+      .tag.blue { background: #dbeafe; color: #1d4ed8; }
+      .tag.purple { background: #ede9fe; color: #6d28d9; }
+      .tag.green { background: #dcfce7; color: #15803d; }
+
+      .task-form { display: grid; gap: 9px; margin-top: 16px; }
+      .task-form label { color: #cbd5e1; font-size: 0.85rem; }
+      .task-form input, .task-form select {
+        width: 100%; padding: 10px; color: #f8fafc; background: #111; border: 1px solid #333; border-radius: 8px;
+      }
+
+      .tasks-list {
+        display: grid; gap: 10px; margin: 18px 0 0; padding: 0; list-style: none;
+      }
+      .task-item {
+        display: flex; align-items: center; gap: 10px; padding: 11px; background: #111;
+        border: 1px solid #292929; border-radius: 10px;
+      }
+      .task-item span { flex: 1; overflow-wrap: anywhere; }
+      .task-item small { display: block; margin-top: 4px; color: #a1a1aa; }
+      .task-item.completed span {
+        color: #94a3b8; text-decoration: line-through;
+      }
+      .task-delete {
+        padding: 7px 9px; color: #f8fafc; background: #202020; border: 1px solid #333; border-radius: 7px; cursor: pointer;
+      }
+
+      @media (max-width: 980px) {
+        .stats { grid-template-columns: repeat(2, minmax(180px, 1fr)); }
+        .content { grid-template-columns: 1fr; }
+      }
+
+      @media (max-width: 760px) {
+        .app { flex-direction: column; }
+        .sidebar { width: 100%; }
+        .main { padding: 20px; }
+        .topbar { flex-direction: column; align-items: flex-start; gap: 14px; }
+        .top-actions { width: 100%; justify-content: space-between; }
+        .search { min-width: 0; flex: 1; }
+        .stats { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">W</div>
+          <h2>Workspace</h2>
+        </div>
+
+        <nav class="nav">
+          <a class="nav-item active" href="#"><span class="nav-icon"></span> Dashboard</a>
+          <a class="nav-item" href="#"><span class="nav-icon"></span> Projects</a>
+          <a class="nav-item" href="#"><span class="nav-icon"></span> Tasks</a>
+          <a class="nav-item" href="#"><span class="nav-icon"></span> Calendar</a>
+          <a class="nav-item" href="#"><span class="nav-icon"></span> Messages</a>
+          <a class="nav-item" href="#"><span class="nav-icon"></span> Reports</a>
+        </nav>
+
+        <div class="sidebar-card">
+          <h4>Quick Note</h4>
+          <p>Finalize the mobile prototype and review the delivery plan before Friday.</p>
+        </div>
+      </aside>
+
+      <main class="main">
+        <div class="topbar">
+          <div class="greeting">
+            <h1>Good morning, Alex</h1>
+            <p>Here’s your project overview for today.</p>
+          </div>
+
+          <div class="top-actions">
+            <input class="search" id="dashboardSearch" type="search" placeholder="Search projects and tasks..." />
+
+            <button class="primary-btn" id="newProjectButton" type="button">+ New Project</button>
+
+            <form class="logout-form" action="/logout" method="POST">
+              <button class="logout-button" type="submit">Log out</button>
+            </form>
+          </div>
+        </div>
+
+        <section class="stats">
+          <div class="stat-card">
+            <div class="stat-top">
+              <span class="stat-label">Projects</span>
+              <div class="stat-icon blue">P</div>
+            </div>
+            <div class="stat-value" id="stat-projects">0</div>
+            <div class="stat-change up">+18.2% vs last month</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-top">
+              <span class="stat-label">In Progress</span>
+              <div class="stat-icon purple">T</div>
+            </div>
+            <div class="stat-value" id="stat-in-progress">0</div>
+            <div class="stat-change up">+9.5% completed</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-top">
+              <span class="stat-label">Completed</span>
+              <div class="stat-icon green">U</div>
+            </div>
+            <div class="stat-value" id="stat-completed">0</div>
+            <div class="stat-change up">+4 new members</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-top">
+              <span class="stat-label">Average Progress</span>
+              <div class="stat-icon orange">R</div>
+            </div>
+            <div class="stat-value" id="stat-average">0%</div>
+            <div class="stat-change down">-2.1% this week</div>
+          </div>
+        </section>
+
+        <section class="content">
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Current Projects</h3>
+              <span class="pill">Updated today</span>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>Project</th>
+                  <th>Owner</th>
+                  <th>Progress</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="projectsList"></tbody>
+            </table>
+          </div>
+
+          <div class="right-column">
+            <div class="panel">
+              <div class="panel-header">
+                <h3>Task Overview</h3>
+              </div>
+
+              <div class="progress-box">
+                <div class="circle" id="taskProgressCircle">
+                  <div class="circle-inner" id="taskProgressLabel">0%</div>
+                </div>
+              </div>
+
+              <div class="mini-list">
+                <div class="mini-item">
+                  <strong>Total tasks</strong>
+                  <span class="tag blue" id="taskTotal">0</span>
+                </div>
+                <div class="mini-item">
+                  <strong>Completed</strong>
+                  <span class="tag green" id="taskCompleted">0</span>
+                </div>
+                <div class="mini-item">
+                  <strong>Remaining</strong>
+                  <span class="tag purple" id="taskRemaining">0</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <h3>Project Tasks</h3>
+              </div>
+
+              <form id="taskForm" class="task-form">
+                <label for="taskProject">Project</label>
+                <select id="taskProject" required></select>
+
+                <label for="taskTitle">Task</label>
+                <input id="taskTitle" type="text" maxlength="200" placeholder="Add a task" required />
+
+                <button class="primary-btn" type="submit">Add Task</button>
+              </form>
+
+              <ul id="tasksList" class="tasks-list"></ul>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const projectsList = document.getElementById("projectsList");
+      const newProjectButton = document.getElementById("newProjectButton");
+
+      function applyDashboardSearch() {
+        const query = document.getElementById("dashboardSearch").value.trim().toLowerCase();
+
+        document
+          .querySelectorAll("#projectsList tr[data-searchable], #tasksList li[data-searchable]")
+          .forEach((item) => {
+            item.hidden = !item.textContent.toLowerCase().includes(query);
+          });
+      }
+
+      document.getElementById("dashboardSearch").addEventListener("input", applyDashboardSearch);
+
+      async function apiRequest(url, options = {}) {
+        const response = await fetch(url, options);
+
+        if (response.redirected) {
+          window.location.replace("/");
+          throw new Error("Your session expired. Please log in again.");
+        }
+
+        const isJson = response.headers.get("content-type")?.includes("application/json");
+        const data = isJson ? await response.json() : null;
+
+        if (!response.ok) {
+          throw new Error(data?.message || `Request failed (${response.status}).`);
+        }
+
+        return { response, data };
+      }
+
+      function addCell(row, text) {
+        const cell = document.createElement("td");
+        cell.textContent = text;
+        row.appendChild(cell);
+        return cell;
+      }
+
+      function renderProject(project) {
+        const row = document.createElement("tr");
+        row.dataset.searchable = "true";
+
+        addCell(row, project.name);
+        addCell(row, project.owner);
+
+        const progressCell = addCell(row, "");
+        const progressInput = document.createElement("input");
+        progressInput.type = "number";
+        progressInput.min = "0";
+        progressInput.max = "100";
+        progressInput.value = project.progress;
+        progressInput.className = "project-progress";
+        progressInput.setAttribute("aria-label", `Progress for ${project.name}`);
+        progressCell.appendChild(progressInput);
+
+        const statusCell = addCell(row, "");
+        const statusSelect = document.createElement("select");
+        statusSelect.className = "project-status";
+        statusSelect.setAttribute("aria-label", `Status for ${project.name}`);
+
+        ["In Progress", "Review", "Done"].forEach((status) => {
+          const option = document.createElement("option");
+          option.value = status;
+          option.textContent = status;
+          option.selected = status === project.status;
+          statusSelect.appendChild(option);
+        });
+
+        statusCell.appendChild(statusSelect);
+
+        const actionsCell = addCell(row, "");
+
+        const saveButton = document.createElement("button");
+        saveButton.type = "button";
+        saveButton.textContent = "Save";
+
+        saveButton.addEventListener("click", async () => {
+          const progress = Number(progressInput.value);
+
+          if (!Number.isInteger(progress) || progress < 0 || progress > 100) {
+            alert("Progress must be a whole number from 0 to 100.");
+            return;
+          }
+
+          try {
+            await apiRequest(`/api/projects/${project.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ progress, status: statusSelect.value })
+            });
+
+            await loadProjects();
+          } catch (error) {
+            alert(error.message);
+          }
+        });
+
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.textContent = "Delete";
+
+        deleteButton.addEventListener("click", async () => {
+          if (!confirm(`Delete "${project.name}"?`)) return;
+
+          try {
+            await apiRequest(`/api/projects/${project.id}`, { method: "DELETE" });
+            await loadProjects();
+          } catch (error) {
+            alert(error.message);
+          }
+        });
+
+        actionsCell.append(saveButton, document.createTextNode(" "), deleteButton);
+        projectsList.appendChild(row);
+      }
+
+      function updateProjectStats(projects) {
+        const count = projects.length;
+        const inProgress = projects.filter((project) => project.status === "In Progress").length;
+        const completed = projects.filter((project) => project.status === "Done").length;
+        const average = count
+          ? Math.round(projects.reduce((sum, project) => sum + project.progress, 0) / count)
+          : 0;
+
+        document.getElementById("stat-projects").textContent = count;
+        document.getElementById("stat-in-progress").textContent = inProgress;
+        document.getElementById("stat-completed").textContent = completed;
+        document.getElementById("stat-average").textContent = `${average}%`;
+      }
+
+      function updateTaskStats(tasks) {
+        const total = tasks.length;
+        const completed = tasks.filter((task) => Boolean(task.completed)).length;
+        const remaining = total - completed;
+        const percent = total ? Math.round((completed / total) * 100) : 0;
+
+        document.getElementById("taskProgressLabel").textContent = `${percent}%`;
+        document.getElementById("taskTotal").textContent = total;
+        document.getElementById("taskCompleted").textContent = completed;
+        document.getElementById("taskRemaining").textContent = remaining;
+
+        document.getElementById("taskProgressCircle").style.background =
+          `conic-gradient(var(--primary) 0 ${percent}%, #292929 ${percent}% 100%)`;
+      }
+
+      async function loadProjects() {
+        const { data: projects } = await apiRequest("/api/projects");
+        updateProjectStats(projects);
+        projectsList.replaceChildren();
+
+        if (!Array.isArray(projects) || projects.length === 0) {
+          const row = document.createElement("tr");
+          const cell = addCell(row, "No projects yet. Select + New Project to create one.");
+          cell.colSpan = 5;
+          projectsList.appendChild(row);
+          await loadTasks([]);
+          return;
+        }
+
+        projects.forEach(renderProject);
+        await loadTasks(projects);
+      }
+
+      newProjectButton.addEventListener("click", async () => {
+        const name = prompt("What is the project name?");
+        if (!name || !name.trim()) return;
+
+        newProjectButton.disabled = true;
+
+        try {
+          await apiRequest("/api/projects", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: name.trim() })
+          });
+
+          await loadProjects();
+        } catch (error) {
+          alert(error.message);
+        } finally {
+          newProjectButton.disabled = false;
+        }
+      });
+
+      async function loadTasks(projects) {
+        const projectSelect = document.getElementById("taskProject");
+        const tasksList = document.getElementById("tasksList");
+
+        projectSelect.replaceChildren();
+
+        projects.forEach((project) => {
+          const option = document.createElement("option");
+          option.value = project.id;
+          option.textContent = project.name;
+          projectSelect.appendChild(option);
+        });
+
+        projectSelect.disabled = projects.length === 0;
+
+        const { data: tasks } = await apiRequest("/api/tasks");
+        updateTaskStats(tasks);
+        tasksList.replaceChildren();
+
+        if (tasks.length === 0) {
+          const empty = document.createElement("li");
+          empty.textContent = projects.length ? "No tasks yet." : "Create a project before adding tasks.";
+          tasksList.appendChild(empty);
+          applyDashboardSearch();
+          return;
+        }
+
+        tasks.forEach((task) => {
+          const item = document.createElement("li");
+          item.dataset.searchable = "true";
+
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = Boolean(task.completed);
+          checkbox.setAttribute("aria-label", `Mark ${task.title} complete`);
+          checkbox.addEventListener("change", async () => {
+            try {
+              await apiRequest(`/api/tasks/${task.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ completed: checkbox.checked })
+              });
+
+              await loadTasks(projects);
+            } catch (error) {
+              alert(error.message);
+            }
+          });
+
+          const text = document.createElement("span");
+          text.textContent = task.title;
+
+          const projectName = document.createElement("small");
+          projectName.textContent = task.project_name;
+          text.appendChild(projectName);
+
+          const deleteButton = document.createElement("button");
+          deleteButton.type = "button";
+          deleteButton.className = "task-delete";
+          deleteButton.textContent = "Delete";
+
+          deleteButton.addEventListener("click", async () => {
+            try {
+              await apiRequest(`/api/tasks/${task.id}`, { method: "DELETE" });
+              await loadTasks(projects);
+            } catch (error) {
+              alert(error.message);
+            }
+          });
+
+          item.append(checkbox, text, deleteButton);
+          tasksList.appendChild(item);
+        });
+
+        applyDashboardSearch();
+      }
+
+      document.getElementById("taskForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const projectId = Number(document.getElementById("taskProject").value);
+        const titleInput = document.getElementById("taskTitle");
+        const title = titleInput.value.trim();
+
+        if (!projectId || !title) return;
+
+        try {
+          await apiRequest("/api/tasks", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ projectId, title })
+          });
+
+          titleInput.value = "";
+          await loadProjects();
+        } catch (error) {
+          alert(error.message);
+        }
+      });
+
+      loadProjects().catch((error) => {
+        console.error("Could not load projects:", error);
+        alert(error.message);
+      });
+    </script>
+  </body>
+</html>
