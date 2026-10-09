@@ -104,6 +104,58 @@ input {
   transform: translateX(4px);
 }
 
+/* Login cards and the welcome card */
+.auth-card,
+.welcome-card {
+  position: relative;
+  overflow: visible;
+  transition:
+    transform 250ms ease,
+    box-shadow 250ms ease,
+    border-color 250ms ease;
+}
+
+.auth-card:hover,
+.auth-card:focus-within,
+.welcome-card:hover,
+.welcome-card:focus-within {
+  transform: translateY(-8px) scale(1.015);
+  border-color: #60a5fa;
+  box-shadow: 0 16px 40px rgba(37, 99, 235, 0.3);
+}
+
+/* Pop-up greeting bubble */
+.auth-card::after,
+.welcome-card::after {
+  position: absolute;
+  z-index: 5;
+  top: -18px;
+  right: 14px;
+  padding: 9px 13px;
+  border: 1px solid rgba(96, 165, 250, 0.6);
+  border-radius: 12px;
+  background: #172554;
+  color: #eff6ff;
+  content: "✨ Ready to get started?";
+  font-size: 0.85rem;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px) scale(0.9);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+.auth-card:hover::after,
+.auth-card:focus-within::after,
+.welcome-card:hover::after,
+.welcome-card:focus-within::after {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.welcome-card::after {
+  content: "✨ Welcome to your workspace!";
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
