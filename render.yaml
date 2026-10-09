@@ -18,3 +18,4 @@ databases:
     plan: free
     databaseName: workspace
     user: workspace_user
+    
