@@ -9,9 +9,15 @@ require("dotenv").config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL is not configured");
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
+  ssl: process.env.NODE_ENV === "production"
+    ? { rejectUnauthorized: false }
+    : false
 });
 
 async function initDatabase() {
@@ -338,6 +344,10 @@ app.delete("/api/tasks/:id", requireAuth, async (req, res) => {
   }
 
   res.sendStatus(204);
+});
+
+app.get("/ai-motion.css", (req, res) => {
+  res.sendFile(path.join(__dirname, "ai-motion.css"));
 });
 
 initDatabase()
