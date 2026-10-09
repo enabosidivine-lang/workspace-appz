@@ -170,62 +170,46 @@
         position: relative;
         width: 130px;
         height: 130px;
-        display: grid;
-        place-items: center;
         margin: 0 0 14px;
-        border: 1px solid rgba(96, 165, 250, 0.65);
         border-radius: 50%;
-        background:
-          radial-gradient(ellipse at 32% 28%, rgba(191, 219, 254, 0.92), transparent 17%),
-          radial-gradient(ellipse at 68% 72%, rgba(14, 165, 233, 0.72), transparent 33%),
-          radial-gradient(ellipse at 48% 48%, #2563eb 0, #172554 55%, #080d19 78%);
-        background-size: 145% 145%, 155% 155%, 100% 100%;
-        box-shadow:
-          0 0 24px rgba(37, 99, 235, 0.45),
-          0 0 54px rgba(14, 165, 233, 0.16),
-          inset 0 0 22px rgba(96, 165, 250, 0.4);
-        animation:
-          alex-orb-drift 8s ease-in-out infinite,
-          alex-orb-radiance 4s ease-in-out infinite;
-        isolation: isolate;
+        filter: drop-shadow(0 0 13px rgba(116, 67, 255, 0.42));
+        animation: alex-orb-breathe 4.6s ease-in-out infinite;
       }
-      .alex-orb::before,
-      .alex-orb::after {
-        position: absolute;
-        border-radius: 50%;
-        content: "";
-        pointer-events: none;
+      .alex-orb svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
       }
-      .alex-orb::before {
-        inset: -7px;
-        border: 1px solid rgba(125, 211, 252, 0.42);
-        box-shadow: 0 0 18px rgba(56, 189, 248, 0.14);
-        animation: alex-water-ripple 4.8s ease-out infinite;
+      .alex-orb-glow {
+        animation: alex-glow-breathe 4.6s ease-in-out infinite;
       }
-      .alex-orb::after {
-        inset: 8px;
-        border: 1px solid rgba(191, 219, 254, 0.25);
-        background:
-          radial-gradient(ellipse at 26% 36%, rgba(224, 242, 254, 0.7), transparent 23%),
-          radial-gradient(ellipse at 72% 64%, rgba(34, 211, 238, 0.58), transparent 34%),
-          radial-gradient(ellipse at 45% 80%, rgba(59, 130, 246, 0.55), transparent 40%);
-        background-size: 160% 160%, 170% 170%, 150% 150%;
-        filter: blur(2px);
-        mix-blend-mode: screen;
-        opacity: 0.78;
-        animation: alex-liquid-surface 7s ease-in-out infinite alternate;
+      .alex-wave-glow,
+      .alex-wave-main,
+      .alex-wave-highlight {
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
       }
-      .alex-orb-core {
-        position: relative;
-        z-index: 1;
-        width: 22px;
-        height: 22px;
-        border-radius: 50%;
-        background: #f0f9ff;
-        box-shadow:
-          0 0 14px 5px rgba(186, 230, 253, 0.72),
-          0 0 34px 12px rgba(56, 189, 248, 0.4);
-        animation: alex-core-breathe 3.2s ease-in-out infinite;
+      .alex-wave-glow {
+        stroke: url(#alexWaveGlow);
+        stroke-width: 25;
+        opacity: 0.58;
+        filter: blur(7px);
+      }
+      .alex-wave-main {
+        stroke: url(#alexWave);
+        stroke-width: 15;
+      }
+      .alex-wave-highlight {
+        stroke: url(#alexWaveHighlight);
+        stroke-width: 4;
+        opacity: 0.86;
+      }
+      .alex-wave-group {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: alex-wave-drift 5.5s ease-in-out infinite alternate;
       }
       .alex-presence h4 { margin: 0; font-size: 1.1rem; }
       .alex-presence p {
@@ -257,37 +241,24 @@
         line-height: 1.45;
         text-align: center;
       }
-      @keyframes alex-orb-drift {
-        0%, 100% { background-position: 15% 20%, 80% 75%, center; }
-        50% { background-position: 80% 75%, 20% 25%, center; }
+      @keyframes alex-orb-breathe {
+        0%, 100% { transform: scale(0.98); }
+        50% { transform: scale(1.025); }
       }
-      @keyframes alex-orb-radiance {
-        0%, 100% {
-          box-shadow: 0 0 24px rgba(37, 99, 235, 0.38), 0 0 48px rgba(14, 165, 233, 0.12), inset 0 0 22px rgba(96, 165, 250, 0.35);
-        }
-        50% {
-          box-shadow: 0 0 34px rgba(37, 99, 235, 0.58), 0 0 66px rgba(14, 165, 233, 0.24), inset 0 0 28px rgba(125, 211, 252, 0.52);
-        }
+      @keyframes alex-glow-breathe {
+        0%, 100% { opacity: 0.66; }
+        50% { opacity: 1; }
       }
-      @keyframes alex-water-ripple {
-        0% { transform: scale(0.94); opacity: 0.7; }
-        75%, 100% { transform: scale(1.16); opacity: 0; }
-      }
-      @keyframes alex-liquid-surface {
-        0% { border-radius: 48% 52% 57% 43% / 44% 42% 58% 56%; transform: rotate(-12deg) scale(0.97); }
-        50% { border-radius: 59% 41% 45% 55% / 55% 60% 40% 45%; transform: rotate(7deg) scale(1.03); }
-        100% { border-radius: 43% 57% 54% 46% / 61% 45% 55% 39%; transform: rotate(17deg) scale(0.99); }
-      }
-      @keyframes alex-core-breathe {
-        0%, 100% { transform: scale(0.88); opacity: 0.82; }
-        50% { transform: scale(1.12); opacity: 1; }
+      @keyframes alex-wave-drift {
+        0% { transform: translateX(-2px) scaleY(0.9) rotate(-2deg); }
+        50% { transform: translateX(1px) scaleY(1.08) rotate(1deg); }
+        100% { transform: translateX(3px) scaleY(0.96) rotate(-1deg); }
       }
 
       @media (prefers-reduced-motion: reduce) {
         .alex-orb,
-        .alex-orb::before,
-        .alex-orb::after,
-        .alex-orb-core {
+        .alex-orb-glow,
+        .alex-wave-group {
           animation: none;
         }
       }
@@ -449,8 +420,62 @@
               </div>
 
               <div class="alex-presence">
-                <div class="alex-orb" role="img" aria-label="Glowing visual for Alex">
-                  <span class="alex-orb-core"></span>
+                <div class="alex-orb" role="img" aria-label="Glowing violet orb with a flowing cyan and magenta wave">
+                  <svg viewBox="0 0 160 160" aria-hidden="true" focusable="false">
+                    <defs>
+                      <radialGradient id="alexOrbFill" cx="38%" cy="30%" r="76%">
+                        <stop offset="0%" stop-color="#28146d" />
+                        <stop offset="66%" stop-color="#100b3d" />
+                        <stop offset="100%" stop-color="#080821" />
+                      </radialGradient>
+                      <linearGradient id="alexRing" x1="20%" y1="10%" x2="80%" y2="100%">
+                        <stop offset="0%" stop-color="#ffb5f4" />
+                        <stop offset="42%" stop-color="#b98cff" />
+                        <stop offset="75%" stop-color="#54eaff" />
+                        <stop offset="100%" stop-color="#a98cff" />
+                      </linearGradient>
+                      <linearGradient id="alexWave" x1="20%" y1="40%" x2="85%" y2="60%">
+                        <stop offset="0%" stop-color="#20e6ff" />
+                        <stop offset="35%" stop-color="#a257ff" />
+                        <stop offset="68%" stop-color="#ff65dc" />
+                        <stop offset="100%" stop-color="#725bff" />
+                      </linearGradient>
+                      <linearGradient id="alexWaveGlow" x1="20%" y1="40%" x2="85%" y2="60%">
+                        <stop offset="0%" stop-color="#00eaff" />
+                        <stop offset="50%" stop-color="#b12dff" />
+                        <stop offset="100%" stop-color="#ff56e8" />
+                      </linearGradient>
+                      <linearGradient id="alexWaveHighlight" x1="20%" y1="40%" x2="85%" y2="60%">
+                        <stop offset="0%" stop-color="#d7ffff" />
+                        <stop offset="45%" stop-color="#dcbaff" />
+                        <stop offset="100%" stop-color="#fff0ff" />
+                      </linearGradient>
+                      <radialGradient id="alexOrbLight" cx="36%" cy="26%" r="78%">
+                        <stop offset="0%" stop-color="#8c65ff" stop-opacity="0.35" />
+                        <stop offset="100%" stop-color="#170b56" stop-opacity="0" />
+                      </radialGradient>
+                      <clipPath id="alexOrbClip">
+                        <circle cx="80" cy="80" r="65" />
+                      </clipPath>
+                    </defs>
+                    <circle class="alex-orb-glow" cx="80" cy="80" r="72" fill="#5127ff" opacity="0.66" />
+                    <circle cx="80" cy="80" r="66" fill="url(#alexOrbFill)" />
+                    <circle cx="80" cy="80" r="66" fill="url(#alexOrbLight)" />
+                    <g clip-path="url(#alexOrbClip)">
+                      <path d="M13 99 C34 93 45 53 66 57 C84 60 90 104 110 104 C128 105 137 79 150 70 L150 151 L13 151 Z"
+                        fill="#6e31f4" opacity="0.22" />
+                      <g class="alex-wave-group">
+                        <path class="alex-wave-glow" d="M13 83 C38 83 44 65 64 69 C83 72 87 99 108 96 C127 94 133 78 150 77" />
+                        <path class="alex-wave-main" d="M13 83 C38 83 44 65 64 69 C83 72 87 99 108 96 C127 94 133 78 150 77" />
+                        <path class="alex-wave-highlight" d="M15 80 C38 80 47 70 64 73 C83 77 89 92 108 90 C126 88 136 78 149 77" />
+                        <path d="M18 89 C38 90 47 82 64 86 C84 91 90 108 109 106 C126 104 137 91 148 88"
+                          fill="none" stroke="#25eaff" stroke-linecap="round" stroke-width="3" opacity="0.54" />
+                      </g>
+                    </g>
+                    <circle cx="80" cy="80" r="66" fill="none" stroke="url(#alexRing)" stroke-width="2.4" />
+                    <circle cx="37" cy="37" r="2" fill="#f8eaff" opacity="0.95" />
+                    <circle cx="124" cy="111" r="1.7" fill="#8bf5ff" opacity="0.9" />
+                  </svg>
                 </div>
                 <h4>Your project assistant</h4>
                 <p id="alexPresenceText">Ready to help you make progress.</p>
