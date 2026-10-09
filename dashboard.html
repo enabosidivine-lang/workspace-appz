@@ -164,9 +164,10 @@
 
       .task-form { display: grid; gap: 9px; margin-top: 16px; }
       .task-form label { color: #cbd5e1; font-size: 0.85rem; }
-      .task-form input, .task-form select {
+      .task-form input, .task-form select, .task-form textarea {
         width: 100%; padding: 10px; color: #f8fafc; background: #111; border: 1px solid #333; border-radius: 8px;
       }
+      .task-form textarea { resize: vertical; font: inherit; }
 
       .tasks-list {
         display: grid; gap: 10px; margin: 18px 0 0; padding: 0; list-style: none;
@@ -177,6 +178,16 @@
       }
       .task-item span { flex: 1; overflow-wrap: anywhere; }
       .task-item small { display: block; margin-top: 4px; color: #a1a1aa; }
+      .task-status {
+        padding: 7px; color: #f8fafc; background: #111; border: 1px solid #333; border-radius: 8px;
+      }
+      .project-details { display: block; margin-top: 5px; color: var(--muted); font-size: 0.8rem; }
+      .project-editor { display: grid; gap: 8px; min-width: 200px; margin-top: 10px; }
+      .project-editor label { color: #cbd5e1; font-size: 0.78rem; }
+      .project-editor input, .project-editor select, .project-editor textarea {
+        width: 100%; padding: 8px; color: #f8fafc; background: #111; border: 1px solid #333; border-radius: 8px;
+      }
+      .project-editor textarea { resize: vertical; font: inherit; }
       .task-item.completed span {
         color: #94a3b8; text-decoration: line-through;
       }
@@ -340,6 +351,22 @@
                 <label for="taskTitle">Task</label>
                 <input id="taskTitle" type="text" maxlength="200" placeholder="Add a task" required />
 
+                <label for="taskNotes">Notes (optional)</label>
+                <textarea id="taskNotes" rows="2" maxlength="2000" placeholder="Add task details"></textarea>
+
+                <label for="taskDueDate">Due date (optional)</label>
+                <input id="taskDueDate" type="date" />
+
+                <label for="taskPriority">Priority</label>
+                <select id="taskPriority">
+                  <option>Low</option>
+                  <option selected>Medium</option>
+                  <option>High</option>
+                </select>
+
+                <label for="taskEstimatedTime">Estimated time (optional)</label>
+                <input id="taskEstimatedTime" type="text" maxlength="100" placeholder="For example, about half a day" />
+
                 <button class="primary-btn" type="submit">Add Task</button>
               </form>
 
@@ -395,7 +422,19 @@
         const row = document.createElement("tr");
         row.dataset.searchable = "true";
 
-        addCell(row, project.name);
+        const projectNameCell = addCell(row, "");
+        const projectName = document.createElement("strong");
+        projectName.textContent = project.name;
+        projectNameCell.appendChild(projectName);
+
+        const projectDetails = document.createElement("small");
+        projectDetails.className = "project-details";
+        projectDetails.textContent = [
+          project.description,
+          project.due_date ? `Due ${project.due_date.slice(0, 10)}` : "",
+          project.priority ? `${project.priority} priority` : ""
+        ].filter(Boolean).join(" · ");
+        if (projectDetails.textContent) projectNameCell.appendChild(projectDetails);
         addCell(row, project.owner);
 
         const progressCell = addCell(row, "");
@@ -413,7 +452,7 @@
         statusSelect.className = "project-status";
         statusSelect.setAttribute("aria-label", `Status for ${project.name}`);
 
-        ["In Progress", "Review", "Done"].forEach((status) => {
+        ["Planning", "In progress", "On hold", "Completed"].forEach((status) => {
           const option = document.createElement("option");
           option.value = status;
           option.textContent = status;
@@ -465,14 +504,76 @@
           }
         });
 
-        actionsCell.append(saveButton, document.createTextNode(" "), deleteButton);
+        const details = document.createElement("details");
+        const detailsSummary = document.createElement("summary");
+        detailsSummary.textContent = "Edit details";
+
+        const detailsEditor = document.createElement("div");
+        detailsEditor.className = "project-editor";
+
+        const descriptionLabel = document.createElement("label");
+        descriptionLabel.textContent = "Description";
+        const descriptionInput = document.createElement("textarea");
+        descriptionInput.rows = 2;
+        descriptionInput.maxLength = 2000;
+        descriptionInput.value = project.description || "";
+        descriptionLabel.appendChild(descriptionInput);
+
+        const dueDateLabel = document.createElement("label");
+        dueDateLabel.textContent = "Due date";
+        const dueDateInput = document.createElement("input");
+        dueDateInput.type = "date";
+        dueDateInput.value = project.due_date ? project.due_date.slice(0, 10) : "";
+        dueDateLabel.appendChild(dueDateInput);
+
+        const priorityLabel = document.createElement("label");
+        priorityLabel.textContent = "Priority";
+        const prioritySelect = document.createElement("select");
+        ["Low", "Medium", "High"].forEach((priority) => {
+          const option = document.createElement("option");
+          option.value = priority;
+          option.textContent = priority;
+          option.selected = priority === project.priority;
+          prioritySelect.appendChild(option);
+        });
+        priorityLabel.appendChild(prioritySelect);
+
+        const saveDetailsButton = document.createElement("button");
+        saveDetailsButton.type = "button";
+        saveDetailsButton.textContent = "Save details";
+        saveDetailsButton.addEventListener("click", async () => {
+          try {
+            await apiRequest(`/api/projects/${project.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                description: descriptionInput.value,
+                dueDate: dueDateInput.value,
+                priority: prioritySelect.value
+              })
+            });
+
+            await loadProjects();
+          } catch (error) {
+            alert(error.message);
+          }
+        });
+
+        detailsEditor.append(
+          descriptionLabel,
+          dueDateLabel,
+          priorityLabel,
+          saveDetailsButton
+        );
+        details.append(detailsSummary, detailsEditor);
+        actionsCell.append(saveButton, document.createTextNode(" "), deleteButton, details);
         projectsList.appendChild(row);
       }
 
       function updateProjectStats(projects) {
         const count = projects.length;
-        const inProgress = projects.filter((project) => project.status === "In Progress").length;
-        const completed = projects.filter((project) => project.status === "Done").length;
+        const inProgress = projects.filter((project) => project.status === "In progress").length;
+        const completed = projects.filter((project) => project.status === "Completed").length;
         const average = count
           ? Math.round(projects.reduce((sum, project) => sum + project.progress, 0) / count)
           : 0;
@@ -568,16 +669,22 @@
           const item = document.createElement("li");
           item.dataset.searchable = "true";
 
-          const checkbox = document.createElement("input");
-          checkbox.type = "checkbox";
-          checkbox.checked = Boolean(task.completed);
-          checkbox.setAttribute("aria-label", `Mark ${task.title} complete`);
-          checkbox.addEventListener("change", async () => {
+          const statusSelect = document.createElement("select");
+          statusSelect.className = "task-status";
+          statusSelect.setAttribute("aria-label", `Status for ${task.title}`);
+          ["Not started", "In progress", "Done"].forEach((status) => {
+            const option = document.createElement("option");
+            option.value = status;
+            option.textContent = status;
+            option.selected = status === task.status;
+            statusSelect.appendChild(option);
+          });
+          statusSelect.addEventListener("change", async () => {
             try {
               await apiRequest(`/api/tasks/${task.id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ completed: checkbox.checked })
+                body: JSON.stringify({ status: statusSelect.value })
               });
 
               await loadTasks(projects);
@@ -590,7 +697,13 @@
           text.textContent = task.title;
 
           const projectName = document.createElement("small");
-          projectName.textContent = task.project_name;
+          projectName.textContent = [
+            task.project_name,
+            task.due_date ? `Due ${task.due_date.slice(0, 10)}` : "",
+            task.priority ? `${task.priority} priority` : "",
+            task.estimated_time || "",
+            task.notes || ""
+          ].filter(Boolean).join(" · ");
           text.appendChild(projectName);
 
           const deleteButton = document.createElement("button");
@@ -607,7 +720,7 @@
             }
           });
 
-          item.append(checkbox, text, deleteButton);
+          item.append(statusSelect, text, deleteButton);
           tasksList.appendChild(item);
         });
 
@@ -620,6 +733,10 @@
         const projectId = Number(document.getElementById("taskProject").value);
         const titleInput = document.getElementById("taskTitle");
         const title = titleInput.value.trim();
+        const notes = document.getElementById("taskNotes").value.trim();
+        const dueDate = document.getElementById("taskDueDate").value;
+        const priority = document.getElementById("taskPriority").value;
+        const estimatedTime = document.getElementById("taskEstimatedTime").value.trim();
 
         if (!projectId || !title) return;
 
@@ -627,10 +744,10 @@
           await apiRequest("/api/tasks", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ projectId, title })
+            body: JSON.stringify({ projectId, title, notes, dueDate, priority, estimatedTime })
           });
 
-          titleInput.value = "";
+          document.getElementById("taskForm").reset();
           await loadProjects();
         } catch (error) {
           alert(error.message);

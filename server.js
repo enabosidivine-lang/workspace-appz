@@ -8,6 +8,8 @@ require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const useDatabaseSsl =
+  process.env.DATABASE_SSL === "true" || process.env.NODE_ENV === "production";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is not configured");
@@ -15,7 +17,7 @@ if (!process.env.DATABASE_URL) {
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production"
+  ssl: useDatabaseSsl
     ? { rejectUnauthorized: false }
     : false
 });
@@ -26,8 +28,14 @@ async function initDatabase() {
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL
+      password_hash TEXT NOT NULL,
+      gender TEXT CHECK (gender IN ('male', 'female') OR gender IS NULL)
     )
+  `);
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS gender TEXT
+      CHECK (gender IN ('male', 'female') OR gender IS NULL)
   `);
 
   await pool.query(`
@@ -37,8 +45,53 @@ async function initDatabase() {
       name TEXT NOT NULL,
       owner TEXT NOT NULL,
       progress INTEGER NOT NULL DEFAULT 0,
-      status TEXT NOT NULL DEFAULT 'In Progress'
+      status TEXT NOT NULL DEFAULT 'Planning'
+        CONSTRAINT projects_status_check
+        CHECK (status IN ('Planning', 'In progress', 'On hold', 'Completed')),
+      description TEXT NOT NULL DEFAULT '',
+      due_date DATE,
+      priority TEXT NOT NULL DEFAULT 'Medium'
+        CONSTRAINT projects_priority_check
+        CHECK (priority IN ('Low', 'Medium', 'High'))
     )
+  `);
+  await pool.query(`
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS due_date DATE,
+      ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'Medium'
+  `);
+  await pool.query(`
+    UPDATE projects
+    SET status = CASE status
+      WHEN 'In Progress' THEN 'In progress'
+      WHEN 'Review' THEN 'On hold'
+      WHEN 'Done' THEN 'Completed'
+      ELSE status
+    END
+    WHERE status IN ('In Progress', 'Review', 'Done')
+  `);
+  await pool.query("ALTER TABLE projects ALTER COLUMN status SET DEFAULT 'Planning'");
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'projects_status_check' AND conrelid = 'projects'::regclass
+      ) THEN
+        ALTER TABLE projects
+        ADD CONSTRAINT projects_status_check
+        CHECK (status IN ('Planning', 'In progress', 'On hold', 'Completed'));
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'projects_priority_check' AND conrelid = 'projects'::regclass
+      ) THEN
+        ALTER TABLE projects
+        ADD CONSTRAINT projects_priority_check
+        CHECK (priority IN ('Low', 'Medium', 'High'));
+      END IF;
+    END $$;
   `);
 
   await pool.query(`
@@ -47,8 +100,68 @@ async function initDatabase() {
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
-      completed BOOLEAN NOT NULL DEFAULT FALSE
+      completed BOOLEAN NOT NULL DEFAULT FALSE,
+      notes TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'Not started'
+        CONSTRAINT tasks_status_check
+        CHECK (status IN ('Not started', 'In progress', 'Done')),
+      due_date DATE,
+      priority TEXT NOT NULL DEFAULT 'Medium'
+        CONSTRAINT tasks_priority_check
+        CHECK (priority IN ('Low', 'Medium', 'High')),
+      estimated_time TEXT,
+      position INTEGER NOT NULL DEFAULT 0
     )
+  `);
+  await pool.query(`
+    ALTER TABLE tasks
+      ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS status TEXT,
+      ADD COLUMN IF NOT EXISTS due_date DATE,
+      ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'Medium',
+      ADD COLUMN IF NOT EXISTS estimated_time TEXT,
+      ADD COLUMN IF NOT EXISTS position INTEGER
+  `);
+  await pool.query(`
+    UPDATE tasks
+    SET status = CASE WHEN completed THEN 'Done' ELSE 'Not started' END
+    WHERE status IS NULL
+  `);
+  await pool.query(`
+    WITH ranked_tasks AS (
+      SELECT id, ROW_NUMBER() OVER (PARTITION BY project_id ORDER BY id) - 1 AS task_position
+      FROM tasks
+      WHERE position IS NULL
+    )
+    UPDATE tasks
+    SET position = ranked_tasks.task_position
+    FROM ranked_tasks
+    WHERE tasks.id = ranked_tasks.id
+  `);
+  await pool.query("ALTER TABLE tasks ALTER COLUMN status SET DEFAULT 'Not started'");
+  await pool.query("ALTER TABLE tasks ALTER COLUMN status SET NOT NULL");
+  await pool.query("ALTER TABLE tasks ALTER COLUMN position SET DEFAULT 0");
+  await pool.query("ALTER TABLE tasks ALTER COLUMN position SET NOT NULL");
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'tasks_status_check' AND conrelid = 'tasks'::regclass
+      ) THEN
+        ALTER TABLE tasks
+        ADD CONSTRAINT tasks_status_check
+        CHECK (status IN ('Not started', 'In progress', 'Done'));
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'tasks_priority_check' AND conrelid = 'tasks'::regclass
+      ) THEN
+        ALTER TABLE tasks
+        ADD CONSTRAINT tasks_priority_check
+        CHECK (priority IN ('Low', 'Medium', 'High'));
+      END IF;
+    END $$;
   `);
 
   await pool.query(`
@@ -91,6 +204,18 @@ function requireAuth(req, res, next) {
   next();
 }
 
+function isValidDate(value) {
+  if (value === null) return true;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function hasOwn(object, key) {
+  return Object.prototype.hasOwnProperty.call(object, key);
+}
+
 function startUserSession(req, userId) {
   return new Promise((resolve, reject) => {
     req.session.regenerate((err) => {
@@ -122,9 +247,14 @@ app.post("/register", async (req, res) => {
   const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
   const email = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : "";
   const password = typeof req.body.password === "string" ? req.body.password : "";
+  const gender = req.body.gender;
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ message: "All fields are required." });
+  if (!name || !email || !password || !["male", "female"].includes(gender)) {
+    return res.status(400).json({ message: "Name, email, password, and gender are required." });
+  }
+
+  if (name.length > 100 || email.length > 254) {
+    return res.status(400).json({ message: "Name or email is too long." });
   }
 
   if (password.length < 8) {
@@ -135,8 +265,8 @@ app.post("/register", async (req, res) => {
     const hash = await bcrypt.hash(password, 12);
 
     const result = await pool.query(
-      "INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id",
-      [name, email, hash]
+      "INSERT INTO users (name, email, password_hash, gender) VALUES ($1, $2, $3, $4) RETURNING id",
+      [name, email, hash, gender]
     );
 
     await startUserSession(req, result.rows[0].id);
@@ -193,7 +323,7 @@ app.post("/logout", (req, res) => {
 app.get("/api/me", requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT name FROM users WHERE id = $1",
+      "SELECT name, gender FROM users WHERE id = $1",
       [req.session.userId]
     );
 
@@ -201,7 +331,7 @@ app.get("/api/me", requireAuth, async (req, res) => {
       return res.status(404).json({ message: "User not found." });
     }
 
-    res.json({ name: result.rows[0].name });
+    res.json({ name: result.rows[0].name, gender: result.rows[0].gender });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Could not load your profile." });
@@ -209,141 +339,364 @@ app.get("/api/me", requireAuth, async (req, res) => {
 });
 
 app.get("/api/projects", requireAuth, async (req, res) => {
-  const result = await pool.query(
-    "SELECT id, name, owner, progress, status FROM projects WHERE user_id = $1 ORDER BY id DESC",
-    [req.session.userId]
-  );
+  try {
+    const result = await pool.query(
+      `SELECT id, name, owner, progress, status, description, due_date, priority
+       FROM projects WHERE user_id = $1 ORDER BY id DESC`,
+      [req.session.userId]
+    );
 
-  res.json(result.rows);
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Could not load your projects." });
+  }
 });
 
 app.post("/api/projects", requireAuth, async (req, res) => {
   const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
+  const description = req.body.description === undefined ? "" : req.body.description;
+  const dueDate = req.body.dueDate === "" || req.body.dueDate === undefined
+    ? null
+    : req.body.dueDate;
+  const priority = req.body.priority === undefined ? "Medium" : req.body.priority;
 
-  if (!name) {
-    return res.status(400).json({ message: "Enter a project name." });
+  if (
+    !name ||
+    name.length > 120 ||
+    typeof description !== "string" ||
+    description.trim().length > 2000
+  ) {
+    return res.status(400).json({ message: "Enter a valid project name and description." });
   }
 
-  const result = await pool.query(
-    "INSERT INTO projects (user_id, name, owner) VALUES ($1, $2, $3) RETURNING id, name, owner, progress, status",
-    [req.session.userId, name, "You"]
-  );
+  if (!isValidDate(dueDate) || !["Low", "Medium", "High"].includes(priority)) {
+    return res.status(400).json({ message: "Enter a valid due date and priority." });
+  }
 
-  res.status(201).json(result.rows[0]);
+  try {
+    const result = await pool.query(
+      `INSERT INTO projects (user_id, name, owner, description, due_date, priority)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, name, owner, progress, status, description, due_date, priority`,
+      [req.session.userId, name, "You", description.trim(), dueDate, priority]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Could not create the project." });
+  }
 });
 
 app.patch("/api/projects/:id", requireAuth, async (req, res) => {
   const projectId = Number(req.params.id);
-  const progress = Number(req.body.progress);
-  const status = req.body.status;
+  const updates = [];
+  const values = [];
+  const addUpdate = (column, value) => {
+    values.push(value);
+    updates.push(`${column} = $${values.length}`);
+  };
 
-  if (!Number.isInteger(projectId)) {
+  if (!Number.isSafeInteger(projectId) || projectId < 1) {
     return res.status(400).json({ message: "Invalid project id." });
   }
 
-  if (!Number.isInteger(progress) || progress < 0 || progress > 100) {
-    return res.status(400).json({ message: "Progress must be between 0 and 100." });
+  if (hasOwn(req.body, "progress")) {
+    const progress = Number(req.body.progress);
+    if (!Number.isInteger(progress) || progress < 0 || progress > 100) {
+      return res.status(400).json({ message: "Progress must be between 0 and 100." });
+    }
+    addUpdate("progress", progress);
   }
 
-  if (!["In Progress", "Review", "Done"].includes(status)) {
-    return res.status(400).json({ message: "Invalid status." });
+  if (hasOwn(req.body, "status")) {
+    if (!["Planning", "In progress", "On hold", "Completed"].includes(req.body.status)) {
+      return res.status(400).json({ message: "Invalid project status." });
+    }
+    addUpdate("status", req.body.status);
   }
 
-  const result = await pool.query(
-    "UPDATE projects SET progress = $1, status = $2 WHERE id = $3 AND user_id = $4 RETURNING id",
-    [progress, status, projectId, req.session.userId]
-  );
-
-  if (result.rows.length === 0) {
-    return res.status(404).json({ message: "Project not found." });
+  if (hasOwn(req.body, "description")) {
+    if (typeof req.body.description !== "string" || req.body.description.length > 2000) {
+      return res.status(400).json({ message: "Project description must be 2,000 characters or fewer." });
+    }
+    addUpdate("description", req.body.description.trim());
   }
 
-  res.json({ message: "Project updated." });
+  if (hasOwn(req.body, "dueDate")) {
+    const dueDate = req.body.dueDate === "" ? null : req.body.dueDate;
+    if (!isValidDate(dueDate)) {
+      return res.status(400).json({ message: "Enter a valid project due date." });
+    }
+    addUpdate("due_date", dueDate);
+  }
+
+  if (hasOwn(req.body, "priority")) {
+    if (!["Low", "Medium", "High"].includes(req.body.priority)) {
+      return res.status(400).json({ message: "Invalid project priority." });
+    }
+    addUpdate("priority", req.body.priority);
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ message: "No valid project changes were provided." });
+  }
+
+  values.push(projectId, req.session.userId);
+  try {
+    const result = await pool.query(
+      `UPDATE projects SET ${updates.join(", ")}
+       WHERE id = $${values.length - 1} AND user_id = $${values.length}
+       RETURNING id, name, owner, progress, status, description, due_date, priority`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Project not found." });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Could not update the project." });
+  }
 });
 
 app.delete("/api/projects/:id", requireAuth, async (req, res) => {
-  const result = await pool.query(
-    "DELETE FROM projects WHERE id = $1 AND user_id = $2 RETURNING id",
-    [req.params.id, req.session.userId]
-  );
-
-  if (result.rows.length === 0) {
-    return res.status(404).json({ message: "Project not found." });
+  const projectId = Number(req.params.id);
+  if (!Number.isSafeInteger(projectId) || projectId < 1) {
+    return res.status(400).json({ message: "Invalid project id." });
   }
 
-  res.sendStatus(204);
+  try {
+    const result = await pool.query(
+      "DELETE FROM projects WHERE id = $1 AND user_id = $2 RETURNING id",
+      [projectId, req.session.userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Project not found." });
+    }
+
+    res.sendStatus(204);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Could not delete the project." });
+  }
 });
 
 app.get("/api/tasks", requireAuth, async (req, res) => {
-  const result = await pool.query(`
-    SELECT
-      tasks.id,
-      tasks.title,
-      tasks.completed,
-      tasks.project_id,
-      projects.name AS project_name
-    FROM tasks
-    JOIN projects ON projects.id = tasks.project_id
-    WHERE tasks.user_id = $1
-    ORDER BY tasks.id DESC
-  `, [req.session.userId]);
+  try {
+    const result = await pool.query(`
+      SELECT
+        tasks.id,
+        tasks.title,
+        tasks.completed,
+        tasks.project_id,
+        tasks.notes,
+        tasks.status,
+        tasks.due_date,
+        tasks.priority,
+        tasks.estimated_time,
+        tasks.position,
+        projects.name AS project_name
+      FROM tasks
+      JOIN projects ON projects.id = tasks.project_id
+      WHERE tasks.user_id = $1
+      ORDER BY tasks.position ASC, tasks.id ASC
+    `, [req.session.userId]);
 
-  res.json(result.rows);
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Could not load your tasks." });
+  }
 });
 
 app.post("/api/tasks", requireAuth, async (req, res) => {
   const title = typeof req.body.title === "string" ? req.body.title.trim() : "";
   const projectId = Number(req.body.projectId);
+  const notes = req.body.notes === undefined ? "" : req.body.notes;
+  const status = req.body.status === undefined ? "Not started" : req.body.status;
+  const dueDate = req.body.dueDate === "" || req.body.dueDate === undefined
+    ? null
+    : req.body.dueDate;
+  const priority = req.body.priority === undefined ? "Medium" : req.body.priority;
+  const estimatedTime = req.body.estimatedTime === undefined || req.body.estimatedTime === ""
+    ? null
+    : req.body.estimatedTime;
 
-  if (!title || title.length > 200 || !Number.isInteger(projectId)) {
+  if (!title || title.length > 200 || !Number.isSafeInteger(projectId) || projectId < 1) {
     return res.status(400).json({ message: "Enter a task name and choose a project." });
   }
 
-  const projectCheck = await pool.query(
-    "SELECT id FROM projects WHERE id = $1 AND user_id = $2",
-    [projectId, req.session.userId]
-  );
-
-  if (projectCheck.rows.length === 0) {
-    return res.status(400).json({ message: "Choose one of your projects." });
+  if (
+    typeof notes !== "string" ||
+    notes.trim().length > 2000 ||
+    !["Not started", "In progress", "Done"].includes(status) ||
+    !isValidDate(dueDate) ||
+    !["Low", "Medium", "High"].includes(priority) ||
+    (estimatedTime !== null && (typeof estimatedTime !== "string" || estimatedTime.trim().length > 100))
+  ) {
+    return res.status(400).json({ message: "Check the task details and try again." });
   }
 
-  const result = await pool.query(
-    "INSERT INTO tasks (user_id, project_id, title) VALUES ($1, $2, $3) RETURNING id",
-    [req.session.userId, projectId, title]
-  );
+  try {
+    const result = await pool.query(
+      `INSERT INTO tasks (
+         user_id, project_id, title, completed, notes, status, due_date,
+         priority, estimated_time, position
+       )
+       SELECT $1, projects.id, $3, $4, $5, $6, $7, $8, $9,
+         COALESCE((SELECT MAX(position) + 1 FROM tasks WHERE project_id = projects.id), 0)
+       FROM projects
+       WHERE projects.id = $2 AND projects.user_id = $1
+       RETURNING id, title, completed, project_id, notes, status, due_date, priority, estimated_time, position`,
+      [
+        req.session.userId,
+        projectId,
+        title,
+        status === "Done",
+        notes.trim(),
+        status,
+        dueDate,
+        priority,
+        typeof estimatedTime === "string" ? estimatedTime.trim() : null
+      ]
+    );
 
-  res.status(201).json({ id: result.rows[0].id });
+    if (result.rows.length === 0) {
+      return res.status(400).json({ message: "Choose one of your projects." });
+    }
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Could not create the task." });
+  }
 });
 
 app.patch("/api/tasks/:id", requireAuth, async (req, res) => {
-  if (typeof req.body.completed !== "boolean") {
-    return res.status(400).json({ message: "Invalid completion value." });
+  const taskId = Number(req.params.id);
+  const updates = [];
+  const values = [];
+  const addUpdate = (column, value) => {
+    values.push(value);
+    updates.push(`${column} = $${values.length}`);
+  };
+
+  if (!Number.isSafeInteger(taskId) || taskId < 1) {
+    return res.status(400).json({ message: "Invalid task id." });
   }
 
-  const result = await pool.query(
-    "UPDATE tasks SET completed = $1 WHERE id = $2 AND user_id = $3 RETURNING id",
-    [req.body.completed, req.params.id, req.session.userId]
-  );
-
-  if (result.rows.length === 0) {
-    return res.status(404).json({ message: "Task not found." });
+  if (hasOwn(req.body, "status")) {
+    if (!["Not started", "In progress", "Done"].includes(req.body.status)) {
+      return res.status(400).json({ message: "Invalid task status." });
+    }
+    addUpdate("status", req.body.status);
+    addUpdate("completed", req.body.status === "Done");
+  } else if (hasOwn(req.body, "completed")) {
+    if (typeof req.body.completed !== "boolean") {
+      return res.status(400).json({ message: "Invalid completion value." });
+    }
+    addUpdate("completed", req.body.completed);
+    addUpdate("status", req.body.completed ? "Done" : "Not started");
   }
 
-  res.sendStatus(204);
+  if (hasOwn(req.body, "title")) {
+    if (typeof req.body.title !== "string" || !req.body.title.trim() || req.body.title.trim().length > 200) {
+      return res.status(400).json({ message: "Task title must be 1 to 200 characters." });
+    }
+    addUpdate("title", req.body.title.trim());
+  }
+
+  if (hasOwn(req.body, "notes")) {
+    if (typeof req.body.notes !== "string" || req.body.notes.length > 2000) {
+      return res.status(400).json({ message: "Task notes must be 2,000 characters or fewer." });
+    }
+    addUpdate("notes", req.body.notes.trim());
+  }
+
+  if (hasOwn(req.body, "dueDate")) {
+    const dueDate = req.body.dueDate === "" ? null : req.body.dueDate;
+    if (!isValidDate(dueDate)) {
+      return res.status(400).json({ message: "Enter a valid task due date." });
+    }
+    addUpdate("due_date", dueDate);
+  }
+
+  if (hasOwn(req.body, "priority")) {
+    if (!["Low", "Medium", "High"].includes(req.body.priority)) {
+      return res.status(400).json({ message: "Invalid task priority." });
+    }
+    addUpdate("priority", req.body.priority);
+  }
+
+  if (hasOwn(req.body, "estimatedTime")) {
+    if (
+      req.body.estimatedTime !== null &&
+      (typeof req.body.estimatedTime !== "string" || req.body.estimatedTime.trim().length > 100)
+    ) {
+      return res.status(400).json({ message: "Estimated time must be 100 characters or fewer." });
+    }
+    addUpdate("estimated_time", typeof req.body.estimatedTime === "string" && req.body.estimatedTime.trim()
+      ? req.body.estimatedTime.trim()
+      : null);
+  }
+
+  if (hasOwn(req.body, "position")) {
+    if (!Number.isSafeInteger(req.body.position) || req.body.position < 0) {
+      return res.status(400).json({ message: "Task order must be a non-negative whole number." });
+    }
+    addUpdate("position", req.body.position);
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ message: "No valid task changes were provided." });
+  }
+
+  values.push(taskId, req.session.userId);
+  try {
+    const result = await pool.query(
+      `UPDATE tasks SET ${updates.join(", ")}
+       WHERE id = $${values.length - 1} AND user_id = $${values.length}
+       RETURNING id, title, completed, project_id, notes, status, due_date, priority, estimated_time, position`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Task not found." });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Could not update the task." });
+  }
 });
 
 app.delete("/api/tasks/:id", requireAuth, async (req, res) => {
-  const result = await pool.query(
-    "DELETE FROM tasks WHERE id = $1 AND user_id = $2 RETURNING id",
-    [req.params.id, req.session.userId]
-  );
-
-  if (result.rows.length === 0) {
-    return res.status(404).json({ message: "Task not found." });
+  const taskId = Number(req.params.id);
+  if (!Number.isSafeInteger(taskId) || taskId < 1) {
+    return res.status(400).json({ message: "Invalid task id." });
   }
 
-  res.sendStatus(204);
+  try {
+    const result = await pool.query(
+      "DELETE FROM tasks WHERE id = $1 AND user_id = $2 RETURNING id",
+      [taskId, req.session.userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Task not found." });
+    }
+
+    res.sendStatus(204);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Could not delete the task." });
+  }
 });
 
 app.get("/ai-motion.css", (req, res) => {
@@ -360,4 +713,3 @@ initDatabase()
     console.error("Database init error:", error);
     process.exit(1);
   });
-

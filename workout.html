@@ -90,7 +90,8 @@
         gap: 12px;
       }
 
-      input {
+      input,
+      select {
         width: 100%;
         padding: 12px 14px;
         border-radius: 12px;
@@ -154,7 +155,12 @@
         <div class="auth-card">
           <h3>Create account</h3>
           <form id="registerForm">
-            <input id="reg-name" type="text" placeholder="Full name" required />
+            <input id="reg-name" type="text" maxlength="100" placeholder="First name" required />
+            <select id="reg-gender" aria-label="Gender" required>
+              <option value="" selected disabled>Select gender</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
             <input id="reg-email" type="email" placeholder="Email" required />
             <input id="reg-password" type="password" placeholder="Password (8+ chars)" minlength="8" required />
             <button class="primary" type="submit">Create account</button>
@@ -193,13 +199,14 @@
         event.preventDefault();
 
         const name = document.getElementById("reg-name").value.trim();
+        const gender = document.getElementById("reg-gender").value;
         const email = document.getElementById("reg-email").value.trim();
         const password = document.getElementById("reg-password").value;
 
         const response = await fetch("/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, email, password })
+          body: JSON.stringify({ name, gender, email, password })
         });
 
         const result = await response.json();
