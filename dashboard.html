@@ -139,28 +139,103 @@
 
       .right-column { display: flex; flex-direction: column; gap: 24px; }
 
-      .progress-box { display: flex; flex-direction: column; align-items: center; }
-      .circle {
-        width: 130px; height: 130px; border-radius: 50%;
-        background: conic-gradient(var(--primary) 0 72%, #e2e8f0 72% 100%);
-        display: flex; align-items: center; justify-content: center; margin: 10px 0 18px;
+      .alex-panel {
+        min-height: 390px;
+        display: flex;
+        flex-direction: column;
       }
-      .circle-inner {
-        width: 90px; height: 90px; background: #111; border-radius: 50%;
-        display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.3rem;
+      .alex-panel .panel-header { margin-bottom: 10px; }
+      .alex-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--muted);
+        font-size: 0.78rem;
       }
-
-      .mini-list { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; }
-      .mini-item {
-        display: flex; align-items: center; justify-content: space-between; background: #111; border: 1px solid var(--border);
-        border-radius: 12px; padding: 12px 14px;
+      .alex-status::before {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--green);
+        content: "";
+        box-shadow: 0 0 10px rgba(34, 197, 94, 0.55);
       }
-      .tag {
-        padding: 6px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: bold;
+      .alex-presence {
+        display: grid;
+        justify-items: center;
+        text-align: center;
+        padding: 8px 0 14px;
       }
-      .tag.blue { background: #dbeafe; color: #1d4ed8; }
-      .tag.purple { background: #ede9fe; color: #6d28d9; }
-      .tag.green { background: #dcfce7; color: #15803d; }
+      .alex-orb {
+        position: relative;
+        width: 130px;
+        height: 130px;
+        display: grid;
+        place-items: center;
+        margin: 0 0 14px;
+        border: 1px solid rgba(96, 165, 250, 0.65);
+        border-radius: 50%;
+        background:
+          radial-gradient(circle at 36% 30%, rgba(147, 197, 253, 0.95), transparent 18%),
+          radial-gradient(circle at 50% 48%, #2563eb 0, #172554 55%, #080d19 76%);
+        box-shadow:
+          0 0 24px rgba(37, 99, 235, 0.45),
+          inset 0 0 22px rgba(96, 165, 250, 0.4);
+        animation: alex-orb-pulse 3.4s ease-in-out infinite;
+      }
+      .alex-orb::before,
+      .alex-orb::after {
+        position: absolute;
+        inset: 8px;
+        border: 1px solid rgba(191, 219, 254, 0.32);
+        border-radius: 50%;
+        content: "";
+      }
+      .alex-orb::after {
+        inset: 17px -5px;
+        transform: rotate(-32deg);
+      }
+      .alex-orb-core {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: #eff6ff;
+        box-shadow: 0 0 20px 7px rgba(147, 197, 253, 0.72);
+      }
+      .alex-presence h4 { margin: 0; font-size: 1.1rem; }
+      .alex-presence p {
+        margin: 5px 0 0;
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      .alex-message {
+        margin-top: auto;
+        padding: 15px 16px;
+        border: 1px solid rgba(96, 165, 250, 0.2);
+        border-radius: 14px;
+        background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(17, 24, 39, 0.8));
+        color: #dbeafe;
+        line-height: 1.55;
+      }
+      .alex-message p { margin: 0; }
+      .alex-project-list {
+        display: grid;
+        gap: 7px;
+        margin: 12px 0 0;
+        padding-left: 20px;
+        color: #eff6ff;
+      }
+      .alex-preview-note {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 0.75rem;
+        line-height: 1.45;
+        text-align: center;
+      }
+      @keyframes alex-orb-pulse {
+        0%, 100% { transform: scale(0.98); filter: brightness(0.94); }
+        50% { transform: scale(1.02); filter: brightness(1.12); }
+      }
 
       .task-form { display: grid; gap: 9px; margin-top: 16px; }
       .task-form label { color: #cbd5e1; font-size: 0.85rem; }
@@ -237,7 +312,7 @@
       <main class="main">
         <div class="topbar">
           <div class="greeting">
-            <h1>Good morning, Alex</h1>
+            <h1>Your workspace</h1>
             <p>Here’s your project overview for today.</p>
           </div>
 
@@ -312,32 +387,26 @@
           </div>
 
           <div class="right-column">
-            <div class="panel">
+            <section class="panel alex-panel" aria-labelledby="alexHeading">
               <div class="panel-header">
-                <h3>Task Overview</h3>
+                <h3 id="alexHeading">Alex</h3>
+                <span class="alex-status">Ready</span>
               </div>
 
-              <div class="progress-box">
-                <div class="circle" id="taskProgressCircle">
-                  <div class="circle-inner" id="taskProgressLabel">0%</div>
+              <div class="alex-presence">
+                <div class="alex-orb" role="img" aria-label="Glowing visual for Alex">
+                  <span class="alex-orb-core"></span>
                 </div>
+                <h4>Your project assistant</h4>
+                <p id="alexPresenceText">Ready to help you make progress.</p>
               </div>
 
-              <div class="mini-list">
-                <div class="mini-item">
-                  <strong>Total tasks</strong>
-                  <span class="tag blue" id="taskTotal">0</span>
-                </div>
-                <div class="mini-item">
-                  <strong>Completed</strong>
-                  <span class="tag green" id="taskCompleted">0</span>
-                </div>
-                <div class="mini-item">
-                  <strong>Remaining</strong>
-                  <span class="tag purple" id="taskRemaining">0</span>
-                </div>
+              <div class="alex-message" aria-live="polite">
+                <p id="alexMessageText">Hi, I’m Alex. I’ll help you keep your projects organized and find a useful next step.</p>
+                <ul class="alex-project-list" id="alexProjectList" hidden></ul>
               </div>
-            </div>
+              <p class="alex-preview-note">Voice and chat controls are coming in the next steps.</p>
+            </section>
 
             <div class="panel">
               <div class="panel-header">
@@ -380,6 +449,62 @@
     <script>
       const projectsList = document.getElementById("projectsList");
       const newProjectButton = document.getElementById("newProjectButton");
+      const alexMessageText = document.getElementById("alexMessageText");
+      const alexProjectList = document.getElementById("alexProjectList");
+      const alexPresenceText = document.getElementById("alexPresenceText");
+      let alexUser = null;
+      let alexProjects = [];
+
+      function renderAlexGreeting() {
+        const firstName = alexUser?.name?.trim().split(/\s+/)[0];
+        const hour = new Date().getHours();
+        const timeGreeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+        const salutation = alexUser?.gender === "male"
+          ? "sir"
+          : alexUser?.gender === "female"
+            ? "ma"
+            : "";
+        const greeting = firstName
+          ? `${timeGreeting}, ${firstName}${salutation ? `, ${salutation}` : ""}.`
+          : `${timeGreeting}.`;
+
+        alexProjectList.replaceChildren();
+
+        if (alexProjects.length === 0) {
+          alexPresenceText.textContent = "Ready to help you make progress.";
+          alexMessageText.textContent =
+            `${greeting} I see you have no saved projects. Would you like to create one?`;
+          alexProjectList.hidden = true;
+          return;
+        }
+
+        alexPresenceText.textContent = `${alexProjects.length} saved ${
+          alexProjects.length === 1 ? "project" : "projects"
+        }`;
+        alexMessageText.textContent =
+          `${greeting} I see you have ${alexProjects.length} saved ${
+            alexProjects.length === 1 ? "project" : "projects"
+          }. Which one should we work on? You can also create a new project.`;
+
+        alexProjects.forEach((project) => {
+          const item = document.createElement("li");
+          item.textContent = project.name;
+          alexProjectList.appendChild(item);
+        });
+        alexProjectList.hidden = false;
+      }
+
+      async function loadAlexProfile() {
+        try {
+          const { data } = await apiRequest("/api/me");
+          alexUser = data;
+          renderAlexGreeting();
+        } catch (error) {
+          console.error("Could not load Alex's user context:", error);
+          alexPresenceText.textContent = "Profile unavailable";
+          alexMessageText.textContent = "I couldn't load your profile, so I can't personalize your greeting.";
+        }
+      }
 
       function applyDashboardSearch() {
         const query = document.getElementById("dashboardSearch").value.trim().toLowerCase();
@@ -584,23 +709,10 @@
         document.getElementById("stat-average").textContent = `${average}%`;
       }
 
-      function updateTaskStats(tasks) {
-        const total = tasks.length;
-        const completed = tasks.filter((task) => Boolean(task.completed)).length;
-        const remaining = total - completed;
-        const percent = total ? Math.round((completed / total) * 100) : 0;
-
-        document.getElementById("taskProgressLabel").textContent = `${percent}%`;
-        document.getElementById("taskTotal").textContent = total;
-        document.getElementById("taskCompleted").textContent = completed;
-        document.getElementById("taskRemaining").textContent = remaining;
-
-        document.getElementById("taskProgressCircle").style.background =
-          `conic-gradient(var(--primary) 0 ${percent}%, #292929 ${percent}% 100%)`;
-      }
-
       async function loadProjects() {
         const { data: projects } = await apiRequest("/api/projects");
+        alexProjects = projects;
+        renderAlexGreeting();
         updateProjectStats(projects);
         projectsList.replaceChildren();
 
@@ -654,7 +766,6 @@
         projectSelect.disabled = projects.length === 0;
 
         const { data: tasks } = await apiRequest("/api/tasks");
-        updateTaskStats(tasks);
         tasksList.replaceChildren();
 
         if (tasks.length === 0) {
@@ -754,6 +865,7 @@
         }
       });
 
+      loadAlexProfile();
       loadProjects().catch((error) => {
         console.error("Could not load projects:", error);
         alert(error.message);
