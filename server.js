@@ -417,10 +417,16 @@ app.post("/api/alex/interpret", requireAuth, async (req, res) => {
 
     if (!response.ok) {
       console.error(`Gemini API request failed with status ${response.status}.`);
+      const messageByStatus = {
+        400: "Alex’s Gemini request was rejected. Check that GEMINI_MODEL is set to a supported model in Render.",
+        401: "Gemini rejected the API key. Check that GEMINI_API_KEY is correct in Render’s Environment settings.",
+        403: "Gemini denied access. Check that the API key is valid and the Gemini API is enabled for its Google project.",
+        404: "The Gemini model was not found. Check GEMINI_MODEL in Render; it should be a supported model name.",
+        429: "Gemini is temporarily at its request or quota limit. Check your Google AI Studio quota and try again later."
+      };
       return res.status(502).json({
-        message: response.status === 429
-          ? "Alex is temporarily at the AI service’s request limit. Please try again shortly."
-          : "Alex couldn’t understand that right now. Please try again."
+        message: messageByStatus[response.status]
+          || "Gemini is temporarily unavailable. Please try again later."
       });
     }
 
@@ -437,7 +443,10 @@ app.post("/api/alex/interpret", requireAuth, async (req, res) => {
       .join("")
       .trim();
     if (!responseText) {
-      return res.status(502).json({ message: "Alex didn’t receive a usable interpretation. Please try again." });
+      console.error("Gemini returned no text candidate for the interpretation request.");
+      return res.status(502).json({
+        message: "Gemini returned no usable response. Please try again; if this continues, check the Render service logs."
+      });
     }
 
     let interpretation;
@@ -445,7 +454,9 @@ app.post("/api/alex/interpret", requireAuth, async (req, res) => {
       interpretation = JSON.parse(responseText);
     } catch (error) {
       console.error("Gemini returned invalid structured output.");
-      return res.status(502).json({ message: "Alex couldn’t understand that right now. Please try again." });
+      return res.status(502).json({
+        message: "Gemini returned an invalid response format. Please try again; if this continues, check the Render service logs."
+      });
     }
 
     if (!interpretation || typeof interpretation !== "object" || !actions.includes(interpretation.action)) {
