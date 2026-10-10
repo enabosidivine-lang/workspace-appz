@@ -392,7 +392,9 @@ app.post("/api/alex/interpret", requireAuth, async (req, res) => {
   ].join(" ");
 
   try {
-    const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const model = (process.env.GEMINI_MODEL || "gemini-2.5-flash")
+      .trim()
+      .replace(/^models\//i, "");
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
       {
@@ -416,12 +418,26 @@ app.post("/api/alex/interpret", requireAuth, async (req, res) => {
     );
 
     if (!response.ok) {
-      console.error(`Gemini API request failed with status ${response.status}.`);
+      const errorBody = await response.text();
+      let apiErrorMessage = "";
+      try {
+        const parsedError = JSON.parse(errorBody);
+        apiErrorMessage = typeof parsedError?.error?.message === "string"
+          ? parsedError.error.message
+          : "";
+      } catch (error) {
+        apiErrorMessage = "";
+      }
+      console.error(
+        `Gemini API request failed (status ${response.status}, model ${model}): ${
+          apiErrorMessage.slice(0, 500) || "No error description returned."
+        }`
+      );
       const messageByStatus = {
         400: "Alex’s Gemini request was rejected. Check that GEMINI_MODEL is set to a supported model in Render.",
         401: "Gemini rejected the API key. Check that GEMINI_API_KEY is correct in Render’s Environment settings.",
         403: "Gemini denied access. Check that the API key is valid and the Gemini API is enabled for its Google project.",
-        404: "The Gemini model was not found. Check GEMINI_MODEL in Render; it should be a supported model name.",
+        404: "Google’s Gemini API could not find that model for this request. Check the Render service logs for the exact Google error, and confirm the model and API key belong to the intended Gemini API setup.",
         429: "Gemini is temporarily at its request or quota limit. Check your Google AI Studio quota and try again later."
       };
       return res.status(502).json({
