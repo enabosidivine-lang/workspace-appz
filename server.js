@@ -392,7 +392,7 @@ app.post("/api/alex/interpret", requireAuth, async (req, res) => {
   ].join(" ");
 
   try {
-    const model = (process.env.GEMINI_MODEL || "gemini-2.5-flash")
+    const model = (process.env.GEMINI_MODEL || "gemini-3.8-flash")
       .trim()
       .replace(/^models\//i, "");
     const response = await fetch(
