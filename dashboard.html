@@ -214,6 +214,15 @@
         transform-origin: center;
         animation: alex-wave-drift 5.5s ease-in-out infinite alternate;
       }
+      .alex-orb.is-speaking {
+        animation: alex-orb-speaking 850ms ease-in-out infinite;
+      }
+      .alex-orb.is-speaking .alex-orb-glow {
+        animation: alex-glow-speaking 700ms ease-in-out infinite alternate;
+      }
+      .alex-orb.is-speaking .alex-wave-group {
+        animation: alex-wave-speaking 900ms ease-in-out infinite alternate;
+      }
       .alex-presence h4 { margin: 0; font-size: 1.1rem; }
       .alex-presence p {
         margin: 5px 0 0;
@@ -346,11 +355,26 @@
         50% { transform: translateX(1px) scaleY(1.08) rotate(1deg); }
         100% { transform: translateX(3px) scaleY(0.96) rotate(-1deg); }
       }
+      @keyframes alex-orb-speaking {
+        0%, 100% { transform: scale(0.99); }
+        50% { transform: scale(1.06); }
+      }
+      @keyframes alex-glow-speaking {
+        from { opacity: 0.58; transform: scale(0.96); }
+        to { opacity: 1; transform: scale(1.1); }
+      }
+      @keyframes alex-wave-speaking {
+        from { transform: translateX(-3px) scaleY(0.84) rotate(-3deg); }
+        to { transform: translateX(3px) scaleY(1.14) rotate(3deg); }
+      }
 
       @media (prefers-reduced-motion: reduce) {
         .alex-orb,
+        .alex-orb.is-speaking,
         .alex-orb-glow,
-        .alex-wave-group {
+        .alex-orb.is-speaking .alex-orb-glow,
+        .alex-wave-group,
+        .alex-orb.is-speaking .alex-wave-group {
           animation: none;
         }
       }
@@ -645,6 +669,7 @@
       const alexMessageText = document.getElementById("alexMessageText");
       const alexProjectList = document.getElementById("alexProjectList");
       const alexPresenceText = document.getElementById("alexPresenceText");
+      const alexOrb = document.querySelector(".alex-orb");
       const alexSpeakButton = document.getElementById("alexSpeakButton");
       const alexStatus = document.querySelector(".alex-status");
       const alexCommandForm = document.getElementById("alexCommandForm");
@@ -659,6 +684,8 @@
       let alexProjectsReady = false;
       let alexGreetingCancelled = false;
       let alexGreetingSpoken = false;
+      let alexSpeechSequence = 0;
+      let alexSpeechButtonLabel = "Play greeting";
       const alexGreetingDeadline = Date.now() + 10000;
       let alexGreetingTimer;
       const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -678,31 +705,39 @@
         if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
           alexSpeakButton.disabled = true;
           alexSpeakButton.textContent = "Speech is not supported in this browser";
-          alexPresenceText.textContent = "Your greeting is shown above; speech is unavailable in this browser.";
+          alexPresenceText.textContent = "The message is shown above; speech is unavailable in this browser.";
           return;
         }
 
+        const speechSequence = ++alexSpeechSequence;
         window.speechSynthesis.cancel();
+        alexOrb.classList.remove("is-speaking");
         const utterance = new SpeechSynthesisUtterance(alexMessageText.textContent);
         utterance.onstart = () => {
+          if (speechSequence !== alexSpeechSequence) return;
           alexGreetingSpoken = true;
+          alexOrb.classList.add("is-speaking");
           alexStatus.textContent = "Speaking";
-          alexPresenceText.textContent = "Speaking your greeting...";
+          alexPresenceText.textContent = "Speaking...";
         };
         utterance.onend = () => {
+          if (speechSequence !== alexSpeechSequence) return;
+          alexOrb.classList.remove("is-speaking");
           alexStatus.textContent = "Ready";
           alexPresenceText.textContent = alexProjects.length
             ? `${alexProjects.length} saved ${alexProjects.length === 1 ? "project" : "projects"}`
             : "Ready to help you make progress.";
-          alexSpeakButton.textContent = "Play greeting";
+          alexSpeakButton.textContent = alexSpeechButtonLabel;
           alexSpeakButton.disabled = false;
         };
         utterance.onerror = (event) => {
+          if (speechSequence !== alexSpeechSequence) return;
+          alexOrb.classList.remove("is-speaking");
           alexStatus.textContent = "Ready";
           alexPresenceText.textContent = event.error === "not-allowed"
-            ? "Your browser blocked automatic speech. Use Play greeting to hear it."
-            : "Speech could not play. Your greeting is still available to read.";
-          alexSpeakButton.textContent = "Play greeting";
+            ? `Your browser blocked speech. Select ${alexSpeechButtonLabel} to try again.`
+            : "Speech could not play. The message is still available to read.";
+          alexSpeakButton.textContent = alexSpeechButtonLabel;
           alexSpeakButton.disabled = false;
         };
 
@@ -856,6 +891,7 @@
       });
 
       function renderAlexGreeting() {
+        alexSpeechButtonLabel = "Play greeting";
         const firstName = alexUser?.name?.trim().split(/\s+/)[0];
         const hour = new Date().getHours();
         const timeGreeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -918,7 +954,8 @@
 
       function showAlexResponse(message, items = []) {
         alexMessageText.textContent = message;
-        alexSpeakButton.textContent = "Play response";
+        alexSpeechButtonLabel = "Play response";
+        alexSpeakButton.textContent = alexSpeechButtonLabel;
         alexProjectList.replaceChildren();
         items.forEach((text) => {
           const item = document.createElement("li");
