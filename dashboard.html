@@ -230,6 +230,23 @@
         line-height: 1.55;
       }
       .alex-message p { margin: 0; }
+      .alex-speak-button {
+        margin-top: 12px;
+        padding: 9px 13px;
+        border: 1px solid rgba(125, 211, 252, 0.42);
+        border-radius: 10px;
+        background: rgba(37, 99, 235, 0.22);
+        color: #eff6ff;
+        font: inherit;
+        font-size: 0.82rem;
+      }
+      .alex-speak-button:hover:not(:disabled) {
+        background: rgba(37, 99, 235, 0.38);
+      }
+      .alex-speak-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+      }
       .alex-project-list {
         display: grid;
         gap: 7px;
@@ -487,6 +504,7 @@
               <div class="alex-message" aria-live="polite">
                 <p id="alexMessageText">Hi, I’m Alex. I’ll help you keep your projects organized and find a useful next step.</p>
                 <ul class="alex-project-list" id="alexProjectList" hidden></ul>
+                <button class="alex-speak-button" id="alexSpeakButton" type="button" hidden>Play greeting</button>
               </div>
               <p class="alex-preview-note">Voice and chat controls are coming in the next steps.</p>
             </section>
@@ -535,8 +553,80 @@
       const alexMessageText = document.getElementById("alexMessageText");
       const alexProjectList = document.getElementById("alexProjectList");
       const alexPresenceText = document.getElementById("alexPresenceText");
+      const alexSpeakButton = document.getElementById("alexSpeakButton");
+      const alexStatus = document.querySelector(".alex-status");
       let alexUser = null;
       let alexProjects = [];
+      let alexProfileReady = false;
+      let alexProjectsReady = false;
+      let alexGreetingCancelled = false;
+      let alexGreetingSpoken = false;
+      const alexGreetingDeadline = Date.now() + 10000;
+      let alexGreetingTimer;
+
+      function cancelAlexAutoGreeting() {
+        if (alexGreetingSpoken || alexGreetingCancelled) return;
+        alexGreetingCancelled = true;
+        window.clearTimeout(alexGreetingTimer);
+      }
+
+      function speakAlexGreeting() {
+        if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
+          alexSpeakButton.disabled = true;
+          alexSpeakButton.textContent = "Speech is not supported in this browser";
+          alexPresenceText.textContent = "Your greeting is shown above; speech is unavailable in this browser.";
+          return;
+        }
+
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(alexMessageText.textContent);
+        utterance.onstart = () => {
+          alexGreetingSpoken = true;
+          alexStatus.textContent = "Speaking";
+          alexPresenceText.textContent = "Speaking your greeting...";
+        };
+        utterance.onend = () => {
+          alexStatus.textContent = "Ready";
+          alexPresenceText.textContent = alexProjects.length
+            ? `${alexProjects.length} saved ${alexProjects.length === 1 ? "project" : "projects"}`
+            : "Ready to help you make progress.";
+          alexSpeakButton.textContent = "Play greeting";
+          alexSpeakButton.disabled = false;
+        };
+        utterance.onerror = (event) => {
+          alexStatus.textContent = "Ready";
+          alexPresenceText.textContent = event.error === "not-allowed"
+            ? "Your browser blocked automatic speech. Use Play greeting to hear it."
+            : "Speech could not play. Your greeting is still available to read.";
+          alexSpeakButton.textContent = "Play greeting";
+          alexSpeakButton.disabled = false;
+        };
+
+        alexSpeakButton.disabled = true;
+        alexSpeakButton.textContent = "Speaking...";
+        alexGreetingSpoken = true;
+        window.speechSynthesis.speak(utterance);
+      }
+
+      function tryAlexAutoGreeting() {
+        if (
+          alexGreetingCancelled ||
+          alexGreetingSpoken ||
+          !alexProfileReady ||
+          !alexProjectsReady ||
+          Date.now() < alexGreetingDeadline
+        ) {
+          return;
+        }
+
+        window.clearTimeout(alexGreetingTimer);
+        speakAlexGreeting();
+      }
+
+      alexGreetingTimer = window.setTimeout(tryAlexAutoGreeting, 10000);
+      alexSpeakButton.addEventListener("click", speakAlexGreeting);
+      newProjectButton.addEventListener("click", cancelAlexAutoGreeting, true);
+      projectsList.addEventListener("click", cancelAlexAutoGreeting, true);
 
       function renderAlexGreeting() {
         const firstName = alexUser?.name?.trim().split(/\s+/)[0];
@@ -581,12 +671,22 @@
         try {
           const { data } = await apiRequest("/api/me");
           alexUser = data;
-          renderAlexGreeting();
+          alexProfileReady = true;
+          updateAlexGreeting();
         } catch (error) {
           console.error("Could not load Alex's user context:", error);
+          alexSpeakButton.disabled = true;
+          alexSpeakButton.textContent = "Greeting unavailable";
           alexPresenceText.textContent = "Profile unavailable";
           alexMessageText.textContent = "I couldn't load your profile, so I can't personalize your greeting.";
         }
+      }
+
+      function updateAlexGreeting() {
+        if (!alexProfileReady || !alexProjectsReady) return;
+        renderAlexGreeting();
+        alexSpeakButton.hidden = false;
+        tryAlexAutoGreeting();
       }
 
       function applyDashboardSearch() {
@@ -795,7 +895,8 @@
       async function loadProjects() {
         const { data: projects } = await apiRequest("/api/projects");
         alexProjects = projects;
-        renderAlexGreeting();
+        alexProjectsReady = true;
+        updateAlexGreeting();
         updateProjectStats(projects);
         projectsList.replaceChildren();
 
