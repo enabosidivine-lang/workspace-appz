@@ -247,6 +247,60 @@
         cursor: not-allowed;
         opacity: 0.65;
       }
+      .alex-command-form {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .alex-command-form input {
+        min-width: 0;
+        flex: 1;
+        padding: 10px 12px;
+        border: 1px solid #34304f;
+        border-radius: 10px;
+        background: #0a0a18;
+        color: #f8fafc;
+        font: inherit;
+        font-size: 0.85rem;
+      }
+      .alex-command-form input:focus {
+        outline: 2px solid rgba(139, 92, 246, 0.7);
+        outline-offset: 1px;
+      }
+      .alex-command-form button {
+        padding: 9px 13px;
+        border: 1px solid rgba(125, 92, 255, 0.65);
+        border-radius: 10px;
+        background: linear-gradient(135deg, #6d3be8, #4330a7);
+        color: #fff;
+        font: inherit;
+        font-size: 0.82rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .alex-command-form button:disabled {
+        cursor: wait;
+        opacity: 0.65;
+      }
+      .alex-command-help {
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 0.73rem;
+        line-height: 1.5;
+      }
+      .alex-command-help summary { cursor: pointer; }
+      .alex-command-help ul { margin: 6px 0 0; padding-left: 20px; }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
       .alex-project-list {
         display: grid;
         gap: 7px;
@@ -506,7 +560,25 @@
                 <ul class="alex-project-list" id="alexProjectList" hidden></ul>
                 <button class="alex-speak-button" id="alexSpeakButton" type="button" hidden>Play greeting</button>
               </div>
-              <p class="alex-preview-note">Voice and chat controls are coming in the next steps.</p>
+              <form class="alex-command-form" id="alexCommandForm">
+                <label class="sr-only" for="alexCommandInput">Type a command for Alex</label>
+                <input id="alexCommandInput" type="text" maxlength="500" placeholder="Ask Alex to manage a project..." autocomplete="off" required />
+                <button id="alexCommandSubmit" type="submit">Send</button>
+              </form>
+              <details class="alex-command-help">
+                <summary>See example commands</summary>
+                <ul>
+                  <li>List my projects</li>
+                  <li>Create a project called Website redesign</li>
+                  <li>Show project details for Website redesign</li>
+                  <li>Set priority of project Website redesign to High</li>
+                  <li>Add task Draft homepage to project Website redesign</li>
+                  <li>Mark task Draft homepage as done</li>
+                  <li>What should I work on next?</li>
+                  <li>Delete project Website redesign</li>
+                </ul>
+              </details>
+              <p class="alex-preview-note">Alex currently understands the example command patterns shown above.</p>
             </section>
 
             <div class="panel">
@@ -555,8 +627,12 @@
       const alexPresenceText = document.getElementById("alexPresenceText");
       const alexSpeakButton = document.getElementById("alexSpeakButton");
       const alexStatus = document.querySelector(".alex-status");
+      const alexCommandForm = document.getElementById("alexCommandForm");
+      const alexCommandInput = document.getElementById("alexCommandInput");
+      const alexCommandSubmit = document.getElementById("alexCommandSubmit");
       let alexUser = null;
       let alexProjects = [];
+      let alexTasks = [];
       let alexProfileReady = false;
       let alexProjectsReady = false;
       let alexGreetingCancelled = false;
@@ -627,6 +703,27 @@
       alexSpeakButton.addEventListener("click", speakAlexGreeting);
       newProjectButton.addEventListener("click", cancelAlexAutoGreeting, true);
       projectsList.addEventListener("click", cancelAlexAutoGreeting, true);
+      alexCommandInput.addEventListener("input", cancelAlexAutoGreeting, { once: true });
+      alexCommandForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        cancelAlexAutoGreeting();
+        const command = alexCommandInput.value.trim();
+        if (!command) return;
+
+        alexCommandSubmit.disabled = true;
+        alexStatus.textContent = "Working";
+        try {
+          await executeAlexCommand(command);
+        } catch (error) {
+          console.error("Alex command failed:", error);
+          showAlexResponse(error.message || "I couldn’t complete that command. Please try again.");
+        } finally {
+          alexCommandSubmit.disabled = false;
+          alexStatus.textContent = "Ready";
+          alexCommandInput.value = "";
+          alexCommandInput.focus();
+        }
+      });
 
       function renderAlexGreeting() {
         const firstName = alexUser?.name?.trim().split(/\s+/)[0];
@@ -687,6 +784,336 @@
         renderAlexGreeting();
         alexSpeakButton.hidden = false;
         tryAlexAutoGreeting();
+      }
+
+      function showAlexResponse(message, items = []) {
+        alexMessageText.textContent = message;
+        alexSpeakButton.textContent = "Play response";
+        alexProjectList.replaceChildren();
+        items.forEach((text) => {
+          const item = document.createElement("li");
+          item.textContent = text;
+          alexProjectList.appendChild(item);
+        });
+        alexProjectList.hidden = items.length === 0;
+      }
+
+      function cleanCommandName(value) {
+        return value.trim().replace(/^["']|["']$/g, "").trim();
+      }
+
+      function findNamedItem(items, requestedName, nameForItem) {
+        const query = cleanCommandName(requestedName).toLocaleLowerCase();
+        const exactMatches = items.filter(
+          (item) => nameForItem(item).toLocaleLowerCase() === query
+        );
+        const matches = exactMatches.length
+          ? exactMatches
+          : items.filter((item) => nameForItem(item).toLocaleLowerCase().includes(query));
+
+        if (matches.length === 1) return { item: matches[0], matches };
+        if (matches.length > 1) return { item: null, matches };
+        return { item: null, matches: [] };
+      }
+
+      function explainNameMatch(result, requestedName, itemType, nameForItem) {
+        if (result.matches.length > 1) {
+          return `I found more than one ${itemType} matching “${requestedName}”. Please use its full name: ${
+            result.matches.map(nameForItem).join(", ")
+          }.`;
+        }
+        return `I couldn’t find a ${itemType} called “${requestedName}”. Check the name and try again.`;
+      }
+
+      function normalizeProjectStatus(value) {
+        const normalized = value.trim().toLocaleLowerCase();
+        const statuses = {
+          planning: "Planning",
+          "in progress": "In progress",
+          "on hold": "On hold",
+          completed: "Completed",
+          complete: "Completed"
+        };
+        return statuses[normalized] || null;
+      }
+
+      function normalizeTaskStatus(value) {
+        const normalized = value.trim().toLocaleLowerCase();
+        const statuses = {
+          "not started": "Not started",
+          "in progress": "In progress",
+          done: "Done",
+          completed: "Done",
+          complete: "Done"
+        };
+        return statuses[normalized] || null;
+      }
+
+      function projectSummary(project) {
+        return `${project.name} — ${project.status}, ${project.progress}% complete, ${project.priority} priority${
+          project.due_date ? `, due ${project.due_date.slice(0, 10)}` : ""
+        }${project.description ? `. ${project.description}` : ""}`;
+      }
+
+      async function executeAlexCommand(rawCommand) {
+        const command = rawCommand.trim().replace(/[.!?]+$/, "");
+        const lowerCommand = command.toLocaleLowerCase();
+
+        if (/^(?:list|show)(?: me)? (?:my )?projects$/.test(lowerCommand)) {
+          if (alexProjects.length === 0) {
+            showAlexResponse("You don’t have any saved projects yet. Create one by saying “Create a project called …”.");
+            return;
+          }
+          showAlexResponse(
+            `You have ${alexProjects.length} saved ${alexProjects.length === 1 ? "project" : "projects"}:`,
+            alexProjects.map((project) => `${project.name} — ${project.status}`)
+          );
+          return;
+        }
+
+        const createProjectMatch = command.match(/^(?:create|start|add) (?:a )?project(?: called| named)?(?:\s+(.+))?$/i);
+        if (createProjectMatch) {
+          const name = cleanCommandName(createProjectMatch[1] || "");
+          if (!name) {
+            showAlexResponse("What would you like to name the project? Try “Create a project called Website redesign”.");
+            return;
+          }
+          if (name.length > 120) {
+            showAlexResponse("Project names must be 120 characters or fewer.");
+            return;
+          }
+          if (!window.confirm(`Create the project “${name}”?`)) {
+            showAlexResponse("Okay, I haven’t created that project.");
+            return;
+          }
+          await apiRequest("/api/projects", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name })
+          });
+          await loadProjects();
+          showAlexResponse(`I created “${name}”. Would you like to add a description, deadline, priority, or tasks?`);
+          return;
+        }
+
+        const deleteProjectMatch = command.match(/^delete (?:the )?project\s+(.+)$/i);
+        if (deleteProjectMatch) {
+          const requestedName = cleanCommandName(deleteProjectMatch[1]);
+          const result = findNamedItem(alexProjects, requestedName, (project) => project.name);
+          if (!result.item) {
+            showAlexResponse(explainNameMatch(result, requestedName, "project", (project) => project.name));
+            return;
+          }
+          if (!window.confirm(`Permanently delete “${result.item.name}” and all its tasks? This cannot be undone.`)) {
+            showAlexResponse(`I kept “${result.item.name}”. Nothing was deleted.`);
+            return;
+          }
+          await apiRequest(`/api/projects/${result.item.id}`, { method: "DELETE" });
+          await loadProjects();
+          showAlexResponse(`“${result.item.name}” and its tasks have been permanently deleted.`);
+          return;
+        }
+
+        const updateProjectMatch = command.match(
+          /^(?:set|update) (status|priority|due date|description) (?:of|for) (?:the )?project\s+(.+?)\s+to\s+(.+)$/i
+        );
+        if (updateProjectMatch) {
+          const [, field, requestedName, rawValue] = updateProjectMatch;
+          const result = findNamedItem(alexProjects, requestedName, (project) => project.name);
+          if (!result.item) {
+            showAlexResponse(explainNameMatch(result, requestedName, "project", (project) => project.name));
+            return;
+          }
+          const project = result.item;
+          const value = rawValue.trim();
+          const body = {};
+
+          if (field.toLocaleLowerCase() === "status") {
+            body.status = normalizeProjectStatus(value);
+            if (!body.status) {
+              showAlexResponse("Project status must be Planning, In progress, On hold, or Completed.");
+              return;
+            }
+          } else if (field.toLocaleLowerCase() === "priority") {
+            const priority = value.toLocaleLowerCase();
+            body.priority = priority.charAt(0).toLocaleUpperCase() + priority.slice(1);
+            if (!["Low", "Medium", "High"].includes(body.priority)) {
+              showAlexResponse("Priority must be Low, Medium, or High.");
+              return;
+            }
+          } else if (field.toLocaleLowerCase() === "due date") {
+            if (value.toLocaleLowerCase() !== "clear" && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+              showAlexResponse("Please use a date in YYYY-MM-DD format, or say “clear” to remove the date.");
+              return;
+            }
+            body.dueDate = value.toLocaleLowerCase() === "clear" ? "" : value;
+          } else {
+            if (value.length > 2000) {
+              showAlexResponse("Project descriptions must be 2,000 characters or fewer.");
+              return;
+            }
+            body.description = value;
+          }
+
+          const fieldLabel = field.toLocaleLowerCase();
+          if (!window.confirm(`Set the ${fieldLabel} of “${project.name}” to “${value}”?`)) {
+            showAlexResponse("Okay, I haven’t changed the project.");
+            return;
+          }
+          await apiRequest(`/api/projects/${project.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+          });
+          await loadProjects();
+          showAlexResponse(`Updated the ${fieldLabel} for “${project.name}”.`);
+          return;
+        }
+
+        const addTaskMatch = command.match(/^(?:add|create) (?:a )?task\s+(.+?)\s+to (?:the )?project\s+(.+)$/i);
+        if (addTaskMatch) {
+          const title = cleanCommandName(addTaskMatch[1]);
+          const requestedProject = cleanCommandName(addTaskMatch[2]);
+          const result = findNamedItem(alexProjects, requestedProject, (project) => project.name);
+          if (!result.item) {
+            showAlexResponse(explainNameMatch(result, requestedProject, "project", (project) => project.name));
+            return;
+          }
+          if (!title || title.length > 200) {
+            showAlexResponse("Task titles must be between 1 and 200 characters.");
+            return;
+          }
+          if (!window.confirm(`Add the task “${title}” to “${result.item.name}”?`)) {
+            showAlexResponse("Okay, I haven’t added that task.");
+            return;
+          }
+          await apiRequest("/api/tasks", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ projectId: result.item.id, title })
+          });
+          await loadProjects();
+          showAlexResponse(`I added “${title}” to “${result.item.name}”.`);
+          return;
+        }
+
+        const setTaskFieldMatch = command.match(
+          /^(?:set|update) (status|priority|due date|notes) (?:of|for) (?:the )?task\s+(.+?)\s+to\s+(.+)$/i
+        );
+        const markTaskMatch = command.match(/^mark (?:the )?task\s+(.+?)\s+as\s+(not started|in progress|done|completed)$/i);
+        const taskMatch = setTaskFieldMatch || markTaskMatch;
+        if (taskMatch) {
+          const requestedTitle = cleanCommandName(markTaskMatch ? taskMatch[1] : taskMatch[2]);
+          const result = findNamedItem(alexTasks, requestedTitle, (task) => task.title);
+          if (!result.item) {
+            showAlexResponse(explainNameMatch(result, requestedTitle, "task", (task) => task.title));
+            return;
+          }
+          const task = result.item;
+          const field = markTaskMatch ? "status" : taskMatch[1];
+          let value = markTaskMatch ? taskMatch[2] : taskMatch[3];
+          const body = {};
+
+          if (field.toLocaleLowerCase() === "status") {
+            body.status = normalizeTaskStatus(value);
+            if (!body.status) {
+              showAlexResponse("Task status must be Not started, In progress, or Done.");
+              return;
+            }
+          } else if (field.toLocaleLowerCase() === "priority") {
+            const priority = value.trim().toLocaleLowerCase();
+            body.priority = priority.charAt(0).toLocaleUpperCase() + priority.slice(1);
+            if (!["Low", "Medium", "High"].includes(body.priority)) {
+              showAlexResponse("Priority must be Low, Medium, or High.");
+              return;
+            }
+          } else if (field.toLocaleLowerCase() === "due date") {
+            value = value.trim();
+            if (value.toLocaleLowerCase() !== "clear" && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+              showAlexResponse("Please use a date in YYYY-MM-DD format, or say “clear” to remove the date.");
+              return;
+            }
+            body.dueDate = value.toLocaleLowerCase() === "clear" ? "" : value;
+          } else {
+            value = value.trim();
+            if (value.length > 2000) {
+              showAlexResponse("Task notes must be 2,000 characters or fewer.");
+              return;
+            }
+            body.notes = value;
+          }
+
+          if (!window.confirm(`Update ${field.toLocaleLowerCase()} for task “${task.title}” in “${task.project_name}”?`)) {
+            showAlexResponse("Okay, I haven’t changed the task.");
+            return;
+          }
+          await apiRequest(`/api/tasks/${task.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+          });
+          await loadProjects();
+          showAlexResponse(`Updated ${field.toLocaleLowerCase()} for “${task.title}”.`);
+          return;
+        }
+
+        const detailsMatch = command.match(/^(?:show|view|describe)(?: me)? (?:the )?project(?: details)?(?: for| of)?\s+(.+)$/i);
+        if (detailsMatch) {
+          const requestedName = cleanCommandName(detailsMatch[1]);
+          const result = findNamedItem(alexProjects, requestedName, (project) => project.name);
+          if (!result.item) {
+            showAlexResponse(explainNameMatch(result, requestedName, "project", (project) => project.name));
+            return;
+          }
+          const project = result.item;
+          const projectTasks = alexTasks.filter((task) => Number(task.project_id) === Number(project.id));
+          showAlexResponse(
+            `${projectSummary(project)}. ${projectTasks.length} ${
+              projectTasks.length === 1 ? "task" : "tasks"
+            }.`,
+            projectTasks.map((task) => `${task.title} — ${task.status}`)
+          );
+          return;
+        }
+
+        if (/^(?:what should i work on next|suggest what i should work on next|suggest a next step)$/i.test(command)) {
+          const openTasks = alexTasks.filter((task) => task.status !== "Done");
+          openTasks.sort((first, second) => {
+            const priorityOrder = { High: 0, Medium: 1, Low: 2 };
+            const priorityDifference = (priorityOrder[first.priority] ?? 1) - (priorityOrder[second.priority] ?? 1);
+            if (priorityDifference) return priorityDifference;
+            if (!first.due_date && !second.due_date) return 0;
+            if (!first.due_date) return 1;
+            if (!second.due_date) return -1;
+            return first.due_date.localeCompare(second.due_date);
+          });
+          if (openTasks.length) {
+            const task = openTasks[0];
+            showAlexResponse(`I suggest working on “${task.title}” in “${task.project_name}”. It is ${task.priority.toLocaleLowerCase()} priority${
+              task.due_date ? ` and due ${task.due_date.slice(0, 10)}` : ""
+            }.`);
+            return;
+          }
+          const activeProjects = alexProjects.filter((project) => project.status !== "Completed");
+          if (activeProjects.length) {
+            const project = activeProjects.sort((first, second) => {
+              if (!first.due_date && !second.due_date) return 0;
+              if (!first.due_date) return 1;
+              if (!second.due_date) return -1;
+              return first.due_date.localeCompare(second.due_date);
+            })[0];
+            showAlexResponse(`You have no unfinished tasks. A useful next step could be adding tasks to “${project.name}”.`);
+            return;
+          }
+          showAlexResponse(alexProjects.length
+            ? "Everything is complete. Nice work!"
+            : "You don’t have a project yet. Create one to get started.");
+          return;
+        }
+
+        showAlexResponse(
+          "I didn’t recognize that command. Try one of the examples, such as “List my projects” or “What should I work on next?”."
+        );
       }
 
       function applyDashboardSearch() {
@@ -950,6 +1377,7 @@
         projectSelect.disabled = projects.length === 0;
 
         const { data: tasks } = await apiRequest("/api/tasks");
+        alexTasks = tasks;
         tasksList.replaceChildren();
 
         if (tasks.length === 0) {
