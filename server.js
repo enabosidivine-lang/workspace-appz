@@ -365,17 +365,17 @@ app.post("/api/alex/interpret", requireAuth, async (req, res) => {
     "unsupported"
   ];
   const schema = {
-    type: "OBJECT",
+    type: "object",
     properties: {
-      action: { type: "STRING", enum: actions },
-      project_name: { type: "STRING" },
-      task_title: { type: "STRING" },
+      action: { type: "string", enum: actions },
+      project_name: { type: "string" },
+      task_title: { type: "string" },
       field: {
-        type: "STRING",
+        type: "string",
         enum: ["status", "priority", "due date", "description", "notes", "none"]
       },
-      value: { type: "STRING" },
-      reply: { type: "STRING" }
+      value: { type: "string" },
+      reply: { type: "string" }
     },
     required: ["action", "project_name", "task_title", "field", "value", "reply"]
   };
@@ -408,9 +408,10 @@ app.post("/api/alex/interpret", requireAuth, async (req, res) => {
           contents: [{ role: "user", parts: [{ text: input }] }],
           generationConfig: {
             responseMimeType: "application/json",
-            responseSchema: schema,
+            responseJsonSchema: schema,
             temperature: 0.1,
-            maxOutputTokens: 300
+            maxOutputTokens: 1024,
+            thinkingConfig: { thinkingLevel: "LOW" }
           }
         }),
         signal: AbortSignal.timeout(12000)
@@ -454,14 +455,24 @@ app.post("/api/alex/interpret", requireAuth, async (req, res) => {
       return res.status(502).json({ message: "Alex couldn’t understand that right now. Please try again." });
     }
 
-    const responseText = result?.candidates?.[0]?.content?.parts
+    const candidate = result?.candidates?.[0];
+    const responseText = candidate?.content?.parts
       ?.map((part) => part.text || "")
       .join("")
       .trim();
     if (!responseText) {
-      console.error("Gemini returned no text candidate for the interpretation request.");
+      console.error(
+        `Gemini returned no text candidate (finish reason: ${candidate?.finishReason || "unknown"}).`
+      );
       return res.status(502).json({
         message: "Gemini returned no usable response. Please try again; if this continues, check the Render service logs."
+      });
+    }
+
+    if (candidate.finishReason === "MAX_TOKENS") {
+      console.error("Gemini exhausted its output token limit before completing the interpretation.");
+      return res.status(502).json({
+        message: "Gemini didn’t finish interpreting that request. Please try a shorter command."
       });
     }
 
@@ -469,7 +480,11 @@ app.post("/api/alex/interpret", requireAuth, async (req, res) => {
     try {
       interpretation = JSON.parse(responseText);
     } catch (error) {
-      console.error("Gemini returned invalid structured output.");
+      console.error(
+        `Gemini returned invalid structured output (finish reason: ${
+          candidate?.finishReason || "unknown"
+        }; parse error: ${error.message}).`
+      );
       return res.status(502).json({
         message: "Gemini returned an invalid response format. Please try again; if this continues, check the Render service logs."
       });
