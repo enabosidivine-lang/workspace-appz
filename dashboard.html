@@ -341,6 +341,24 @@
       .alex-voice-controls output {
         color: #e9d5ff;
       }
+      .alex-conversation-toggle {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        margin-top: 10px;
+        padding: 10px;
+        border: 1px solid rgba(125, 92, 255, 0.3);
+        border-radius: 10px;
+        background: rgba(67, 48, 167, 0.12);
+        color: #e9d5ff;
+        font-size: 0.78rem;
+        line-height: 1.4;
+        cursor: pointer;
+      }
+      .alex-conversation-toggle input {
+        margin-top: 2px;
+        accent-color: #a78bfa;
+      }
       .alex-command-form {
         display: flex;
         gap: 8px;
@@ -733,7 +751,11 @@
                 <button class="alex-mic-button" id="alexListenButton" type="button" aria-label="Start voice input" aria-pressed="false" title="Start voice input">🎙</button>
                 <button id="alexCommandSubmit" type="submit">Send</button>
               </form>
-              <p class="alex-voice-status" id="alexVoiceStatus" aria-live="polite">Voice is optional. Your browser may process microphone audio. The command you send, including any names or details you type, is sent to Google Gemini for interpretation. Saved project and task records are not sent automatically.</p>
+              <label class="alex-conversation-toggle" for="alexConversationMode">
+                <input id="alexConversationMode" type="checkbox" />
+                <span><strong>Voice conversation mode</strong><br />When enabled, Alex speaks replies, and recognized microphone commands are sent when you stop speaking. You can review or edit them instead when this is off.</span>
+              </label>
+              <p class="alex-voice-status" id="alexVoiceStatus" aria-live="polite">Voice is optional. Your browser may process microphone audio. Commands sent to Alex, including names or details, go to Google Gemini for interpretation; saved project and task records are not sent automatically.</p>
               <details class="alex-command-help">
                 <summary>See example commands</summary>
                 <ul>
@@ -805,6 +827,7 @@
       const alexCommandSubmit = document.getElementById("alexCommandSubmit");
       const alexListenButton = document.getElementById("alexListenButton");
       const alexVoiceStatus = document.getElementById("alexVoiceStatus");
+      const alexConversationMode = document.getElementById("alexConversationMode");
       let alexUser = null;
       let alexProjects = [];
       let alexTasks = [];
@@ -884,6 +907,14 @@
 
       alexVoiceRate.addEventListener("input", () => {
         alexVoiceRateValue.value = `${Number(alexVoiceRate.value).toFixed(2)}×`;
+      });
+
+      alexConversationMode.addEventListener("change", () => {
+        if (alexConversationMode.checked) {
+          alexVoiceStatus.textContent = "Voice conversation mode is on. After you stop speaking, Alex will send the recognized command to Gemini and read the reply aloud. Project changes and deletions still require your confirmation.";
+        } else {
+          alexVoiceStatus.textContent = "Voice conversation mode is off. Review voice transcripts and press Send; choose Play response if you want Alex to speak.";
+        }
       });
 
       function speakAlexGreeting() {
@@ -1035,8 +1066,13 @@
           alexListenButton.title = "Start voice input";
           alexListenButton.setAttribute("aria-pressed", "false");
           if (alexVoiceRecognized) {
-            alexVoiceStatus.textContent = "Transcript ready. Review it, edit if needed, then press Send.";
-            alexCommandInput.focus();
+            if (alexConversationMode.checked && !alexVoiceError) {
+              alexVoiceStatus.textContent = "Sending your recognized command to Alex…";
+              alexCommandForm.requestSubmit(alexCommandSubmit);
+            } else {
+              alexVoiceStatus.textContent = "Transcript ready. Review it, edit if needed, then press Send.";
+              alexCommandInput.focus();
+            }
           } else if (!alexVoiceError) {
             alexVoiceStatus.textContent = "No speech was captured. You can try the microphone again or type a command.";
           }
@@ -1180,6 +1216,9 @@
           alexProjectList.appendChild(item);
         });
         alexProjectList.hidden = items.length === 0;
+        if (alexConversationMode.checked) {
+          speakAlexGreeting();
+        }
       }
 
       function cleanCommandName(value) {
