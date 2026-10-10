@@ -584,7 +584,7 @@
                 <button class="alex-mic-button" id="alexListenButton" type="button" aria-label="Start voice input" aria-pressed="false" title="Start voice input">🎙</button>
                 <button id="alexCommandSubmit" type="submit">Send</button>
               </form>
-              <p class="alex-voice-status" id="alexVoiceStatus" aria-live="polite">Voice is optional. Your browser may process microphone audio; review the transcript before sending.</p>
+              <p class="alex-voice-status" id="alexVoiceStatus" aria-live="polite">Voice is optional. Your browser may process microphone audio. The command you send, including any names or details you type, is sent to Google Gemini for interpretation. Saved project and task records are not sent automatically.</p>
               <details class="alex-command-help">
                 <summary>See example commands</summary>
                 <ul>
@@ -832,7 +832,18 @@
         alexCommandSubmit.disabled = true;
         alexStatus.textContent = "Working";
         try {
-          await executeAlexCommand(command);
+          const { data: interpretation } = await apiRequest("/api/alex/interpret", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: command })
+          });
+          if (typeof interpretation.reply === "string" && interpretation.reply) {
+            showAlexResponse(interpretation.reply);
+          } else if (typeof interpretation.command === "string" && interpretation.command) {
+            await executeAlexCommand(interpretation.command);
+          } else {
+            throw new Error("Alex couldn’t interpret that request. Please try another phrasing.");
+          }
         } catch (error) {
           console.error("Alex command failed:", error);
           showAlexResponse(error.message || "I couldn’t complete that command. Please try again.");
@@ -918,7 +929,13 @@
       }
 
       function cleanCommandName(value) {
-        return value.trim().replace(/^["']|["']$/g, "").trim();
+        const trimmed = value.trim();
+        const first = trimmed[0];
+        const last = trimmed[trimmed.length - 1];
+        if ((first === '"' || first === "'") && last === first) {
+          return trimmed.slice(1, -1).replace(/\\(["\\])/g, "$1").trim();
+        }
+        return trimmed;
       }
 
       function findNamedItem(items, requestedName, nameForItem) {
@@ -1034,7 +1051,7 @@
         }
 
         const updateProjectMatch = command.match(
-          /^(?:set|update) (status|priority|due date|description) (?:of|for) (?:the )?project\s+(.+?)\s+to\s+(.+)$/i
+          /^(?:set|update) (status|priority|due date|description) (?:of|for) (?:the )?project\s+("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|.+?)\s+to\s+(.+)$/i
         );
         if (updateProjectMatch) {
           const [, field, requestedName, rawValue] = updateProjectMatch;
@@ -1044,7 +1061,7 @@
             return;
           }
           const project = result.item;
-          const value = rawValue.trim();
+          const value = cleanCommandName(rawValue);
           const body = {};
 
           if (field.toLocaleLowerCase() === "status") {
@@ -1089,7 +1106,9 @@
           return;
         }
 
-        const addTaskMatch = command.match(/^(?:add|create) (?:a )?task\s+(.+?)\s+to (?:the )?project\s+(.+)$/i);
+        const addTaskMatch = command.match(
+          /^(?:add|create) (?:a )?task\s+("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|.+?)\s+to (?:the )?project\s+(.+)$/i
+        );
         if (addTaskMatch) {
           const title = cleanCommandName(addTaskMatch[1]);
           const requestedProject = cleanCommandName(addTaskMatch[2]);
@@ -1117,7 +1136,7 @@
         }
 
         const setTaskFieldMatch = command.match(
-          /^(?:set|update) (status|priority|due date|notes) (?:of|for) (?:the )?task\s+(.+?)\s+to\s+(.+)$/i
+          /^(?:set|update) (status|priority|due date|notes) (?:of|for) (?:the )?task\s+("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|.+?)\s+to\s+(.+)$/i
         );
         const markTaskMatch = command.match(/^mark (?:the )?task\s+(.+?)\s+as\s+(not started|in progress|done|completed)$/i);
         const taskMatch = setTaskFieldMatch || markTaskMatch;
@@ -1130,7 +1149,7 @@
           }
           const task = result.item;
           const field = markTaskMatch ? "status" : taskMatch[1];
-          let value = markTaskMatch ? taskMatch[2] : taskMatch[3];
+          let value = markTaskMatch ? taskMatch[2] : cleanCommandName(taskMatch[3]);
           const body = {};
 
           if (field.toLocaleLowerCase() === "status") {
