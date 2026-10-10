@@ -154,6 +154,7 @@
         gap: 7px;
         color: var(--muted);
         font-size: 0.78rem;
+        transition: color 180ms ease;
       }
       .alex-status::before {
         width: 8px;
@@ -162,6 +163,15 @@
         background: var(--green);
         content: "";
         box-shadow: 0 0 10px rgba(34, 197, 94, 0.55);
+        transition: background-color 180ms ease, box-shadow 180ms ease;
+      }
+      .alex-status.is-speaking {
+        color: #a5f3fc;
+      }
+      .alex-status.is-speaking::before {
+        background: #22d3ee;
+        box-shadow: 0 0 13px rgba(34, 211, 238, 0.9);
+        animation: alex-status-beat 650ms ease-in-out infinite alternate;
       }
       .alex-presence {
         display: grid;
@@ -177,6 +187,24 @@
         border-radius: 50%;
         filter: drop-shadow(0 0 13px rgba(116, 67, 255, 0.42));
         animation: alex-orb-breathe 4.6s ease-in-out infinite;
+      }
+      .alex-orb::before,
+      .alex-orb::after {
+        position: absolute;
+        inset: -8px;
+        border: 1px solid rgba(91, 226, 255, 0.72);
+        border-radius: 50%;
+        content: "";
+        opacity: 0;
+        pointer-events: none;
+      }
+      .alex-orb::after {
+        inset: -18px;
+        border: 2px dashed rgba(194, 121, 255, 0.8);
+        border-top-color: #f0abfc;
+        border-right-color: #67e8f9;
+        border-bottom-color: transparent;
+        border-left-color: transparent;
       }
       .alex-orb svg {
         display: block;
@@ -215,13 +243,26 @@
         animation: alex-wave-drift 5.5s ease-in-out infinite alternate;
       }
       .alex-orb.is-speaking {
-        animation: alex-orb-speaking 850ms ease-in-out infinite;
+        animation: alex-orb-speaking 1100ms cubic-bezier(0.37, 0, 0.63, 1) infinite;
+      }
+      .alex-orb.is-speaking::before {
+        animation: alex-orb-ripple 1250ms ease-out infinite;
+      }
+      .alex-orb.is-speaking::after {
+        opacity: 0.9;
+        animation: alex-orbit-spin 3s linear infinite;
+      }
+      .alex-orb.is-speaking svg {
+        animation: alex-orb-color-shift 2600ms ease-in-out infinite alternate;
+      }
+      .alex-orb.is-speaking.word-beat svg {
+        animation: alex-word-beat 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
       }
       .alex-orb.is-speaking .alex-orb-glow {
-        animation: alex-glow-speaking 700ms ease-in-out infinite alternate;
+        animation: alex-glow-speaking 850ms ease-in-out infinite alternate;
       }
       .alex-orb.is-speaking .alex-wave-group {
-        animation: alex-wave-speaking 900ms ease-in-out infinite alternate;
+        animation: alex-wave-speaking 720ms ease-in-out infinite alternate;
       }
       .alex-presence h4 { margin: 0; font-size: 1.1rem; }
       .alex-presence p {
@@ -255,6 +296,50 @@
       .alex-speak-button:disabled {
         cursor: not-allowed;
         opacity: 0.65;
+      }
+      .alex-speak-button.is-speaking {
+        border-color: rgba(103, 232, 249, 0.72);
+        background: linear-gradient(110deg, rgba(8, 145, 178, 0.42), rgba(109, 59, 232, 0.42));
+        box-shadow: 0 0 18px rgba(34, 211, 238, 0.16);
+      }
+      .alex-voice-settings {
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+      .alex-voice-settings summary {
+        width: fit-content;
+        cursor: pointer;
+      }
+      .alex-voice-controls {
+        display: grid;
+        gap: 8px;
+        margin-top: 8px;
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: rgba(11, 11, 11, 0.72);
+      }
+      .alex-voice-controls label {
+        display: grid;
+        gap: 4px;
+      }
+      .alex-voice-controls select {
+        width: 100%;
+        min-width: 0;
+        padding: 7px 8px;
+        border: 1px solid #34304f;
+        border-radius: 8px;
+        background: #0a0a18;
+        color: #f8fafc;
+        font: inherit;
+      }
+      .alex-voice-controls input[type="range"] {
+        width: 100%;
+        accent-color: #a78bfa;
+      }
+      .alex-voice-controls output {
+        color: #e9d5ff;
       }
       .alex-command-form {
         display: flex;
@@ -356,25 +441,51 @@
         100% { transform: translateX(3px) scaleY(0.96) rotate(-1deg); }
       }
       @keyframes alex-orb-speaking {
-        0%, 100% { transform: scale(0.99); }
-        50% { transform: scale(1.06); }
+        0%, 100% { transform: scale(1); filter: drop-shadow(0 0 16px rgba(34, 211, 238, 0.35)); }
+        50% { transform: scale(1.055); filter: drop-shadow(0 0 32px rgba(167, 139, 250, 0.8)); }
+      }
+      @keyframes alex-orb-ripple {
+        0% { transform: scale(0.92); opacity: 0.96; }
+        75% { opacity: 0.35; }
+        100% { transform: scale(1.2); opacity: 0; }
+      }
+      @keyframes alex-orbit-spin {
+        to { transform: rotate(360deg); }
+      }
+      @keyframes alex-orb-color-shift {
+        from { filter: saturate(1) hue-rotate(0deg); }
+        to { filter: saturate(1.5) hue-rotate(24deg); }
+      }
+      @keyframes alex-word-beat {
+        0% { transform: scale(1); filter: brightness(1); }
+        42% { transform: scale(1.045); filter: brightness(1.35); }
+        100% { transform: scale(1); filter: brightness(1); }
       }
       @keyframes alex-glow-speaking {
-        from { opacity: 0.58; transform: scale(0.96); }
-        to { opacity: 1; transform: scale(1.1); }
+        from { opacity: 0.46; transform: scale(0.94); }
+        to { opacity: 1; transform: scale(1.12); }
       }
       @keyframes alex-wave-speaking {
-        from { transform: translateX(-3px) scaleY(0.84) rotate(-3deg); }
-        to { transform: translateX(3px) scaleY(1.14) rotate(3deg); }
+        from { transform: translateX(-5px) scaleY(0.76) rotate(-5deg); }
+        to { transform: translateX(5px) scaleY(1.22) rotate(5deg); }
+      }
+      @keyframes alex-status-beat {
+        from { transform: scale(0.82); }
+        to { transform: scale(1.22); }
       }
 
       @media (prefers-reduced-motion: reduce) {
         .alex-orb,
         .alex-orb.is-speaking,
+        .alex-orb.is-speaking::before,
+        .alex-orb.is-speaking::after,
+        .alex-orb.is-speaking svg,
+        .alex-orb.is-speaking.word-beat svg,
         .alex-orb-glow,
         .alex-orb.is-speaking .alex-orb-glow,
         .alex-wave-group,
-        .alex-orb.is-speaking .alex-wave-group {
+        .alex-orb.is-speaking .alex-wave-group,
+        .alex-status.is-speaking::before {
           animation: none;
         }
       }
@@ -532,7 +643,7 @@
             <section class="panel alex-panel" aria-labelledby="alexHeading">
               <div class="panel-header">
                 <h3 id="alexHeading">Alex</h3>
-                <span class="alex-status">Ready</span>
+                <span class="alex-status" aria-live="polite">Ready</span>
               </div>
 
               <div class="alex-presence">
@@ -600,8 +711,22 @@
               <div class="alex-message" aria-live="polite">
                 <p id="alexMessageText">Hi, I’m Alex. I’ll help you keep your projects organized and find a useful next step.</p>
                 <ul class="alex-project-list" id="alexProjectList" hidden></ul>
-                <button class="alex-speak-button" id="alexSpeakButton" type="button" hidden>Play greeting</button>
+                <button class="alex-speak-button" id="alexSpeakButton" type="button" aria-label="Play greeting" hidden>Play greeting</button>
               </div>
+              <details class="alex-voice-settings">
+                <summary>Voice and speaking pace</summary>
+                <div class="alex-voice-controls">
+                  <label for="alexVoiceSelect">Voice
+                    <select id="alexVoiceSelect">
+                      <option value="">System default</option>
+                    </select>
+                  </label>
+                  <label for="alexVoiceRate">Speaking pace
+                    <span><input id="alexVoiceRate" type="range" min="0.8" max="1.2" step="0.05" value="0.95" /> <output id="alexVoiceRateValue" for="alexVoiceRate">0.95×</output></span>
+                  </label>
+                  <span>Voice options depend on what your browser and device provide.</span>
+                </div>
+              </details>
               <form class="alex-command-form" id="alexCommandForm">
                 <label class="sr-only" for="alexCommandInput">Type a command for Alex</label>
                 <input id="alexCommandInput" type="text" maxlength="500" placeholder="Ask Alex to manage a project..." autocomplete="off" required />
@@ -671,6 +796,9 @@
       const alexPresenceText = document.getElementById("alexPresenceText");
       const alexOrb = document.querySelector(".alex-orb");
       const alexSpeakButton = document.getElementById("alexSpeakButton");
+      const alexVoiceSelect = document.getElementById("alexVoiceSelect");
+      const alexVoiceRate = document.getElementById("alexVoiceRate");
+      const alexVoiceRateValue = document.getElementById("alexVoiceRateValue");
       const alexStatus = document.querySelector(".alex-status");
       const alexCommandForm = document.getElementById("alexCommandForm");
       const alexCommandInput = document.getElementById("alexCommandInput");
@@ -686,6 +814,7 @@
       let alexGreetingSpoken = false;
       let alexSpeechSequence = 0;
       let alexSpeechButtonLabel = "Play greeting";
+      let alexSpeechActive = false;
       const alexGreetingDeadline = Date.now() + 10000;
       let alexGreetingTimer;
       const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -701,6 +830,62 @@
         window.clearTimeout(alexGreetingTimer);
       }
 
+      function setAlexSpeaking(isSpeaking) {
+        alexOrb.classList.toggle("is-speaking", isSpeaking);
+        alexStatus.classList.toggle("is-speaking", isSpeaking);
+        alexStatus.textContent = isSpeaking ? "Speaking" : "Ready";
+      }
+
+      function stopAlexSpeech() {
+        alexSpeechSequence += 1;
+        window.speechSynthesis.cancel();
+        alexSpeechActive = false;
+        alexOrb.classList.remove("word-beat");
+        setAlexSpeaking(false);
+        alexSpeakButton.classList.remove("is-speaking");
+        alexSpeakButton.textContent = alexSpeechButtonLabel;
+        alexSpeakButton.setAttribute("aria-label", alexSpeechButtonLabel);
+        alexSpeakButton.disabled = false;
+        alexPresenceText.textContent = alexProjects.length
+          ? `${alexProjects.length} saved ${alexProjects.length === 1 ? "project" : "projects"}`
+          : "Ready to help you make progress.";
+      }
+
+      function populateAlexVoices() {
+        const voices = window.speechSynthesis.getVoices();
+        const selectedVoice = alexVoiceSelect.value;
+        alexVoiceSelect.replaceChildren(new Option("System default", ""));
+        voices
+          .slice()
+          .sort((first, second) => {
+            const firstLanguageMatch = first.lang.toLocaleLowerCase().startsWith(
+              (navigator.language || "en").slice(0, 2).toLocaleLowerCase()
+            );
+            const secondLanguageMatch = second.lang.toLocaleLowerCase().startsWith(
+              (navigator.language || "en").slice(0, 2).toLocaleLowerCase()
+            );
+            return Number(secondLanguageMatch) - Number(firstLanguageMatch)
+              || first.name.localeCompare(second.name);
+          })
+          .forEach((voice) => {
+            const option = new Option(`${voice.name} (${voice.lang})`, voice.voiceURI);
+            alexVoiceSelect.appendChild(option);
+          });
+        alexVoiceSelect.value = selectedVoice;
+      }
+
+      if ("speechSynthesis" in window) {
+        populateAlexVoices();
+        window.speechSynthesis.addEventListener("voiceschanged", populateAlexVoices);
+      } else {
+        alexVoiceSelect.disabled = true;
+        alexVoiceRate.disabled = true;
+      }
+
+      alexVoiceRate.addEventListener("input", () => {
+        alexVoiceRateValue.value = `${Number(alexVoiceRate.value).toFixed(2)}×`;
+      });
+
       function speakAlexGreeting() {
         if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
           alexSpeakButton.disabled = true;
@@ -711,38 +896,60 @@
 
         const speechSequence = ++alexSpeechSequence;
         window.speechSynthesis.cancel();
-        alexOrb.classList.remove("is-speaking");
+        setAlexSpeaking(false);
+        alexSpeechActive = true;
         const utterance = new SpeechSynthesisUtterance(alexMessageText.textContent);
+        utterance.rate = Number(alexVoiceRate.value);
+        utterance.voice = window.speechSynthesis.getVoices()
+          .find((voice) => voice.voiceURI === alexVoiceSelect.value) || null;
         utterance.onstart = () => {
           if (speechSequence !== alexSpeechSequence) return;
           alexGreetingSpoken = true;
-          alexOrb.classList.add("is-speaking");
-          alexStatus.textContent = "Speaking";
+          alexSpeechActive = true;
+          setAlexSpeaking(true);
+          alexSpeakButton.classList.add("is-speaking");
+          alexSpeakButton.textContent = "Stop speaking";
+          alexSpeakButton.setAttribute("aria-label", "Stop speaking");
           alexPresenceText.textContent = "Speaking...";
+        };
+        utterance.onboundary = (event) => {
+          if (speechSequence !== alexSpeechSequence || !alexSpeechActive) return;
+          if (event.name !== "word" && event.name !== "sentence") return;
+          alexOrb.classList.remove("word-beat");
+          window.requestAnimationFrame(() => {
+            if (speechSequence === alexSpeechSequence && alexSpeechActive) {
+              alexOrb.classList.add("word-beat");
+            }
+          });
         };
         utterance.onend = () => {
           if (speechSequence !== alexSpeechSequence) return;
-          alexOrb.classList.remove("is-speaking");
-          alexStatus.textContent = "Ready";
+          alexSpeechActive = false;
+          setAlexSpeaking(false);
+          alexSpeakButton.classList.remove("is-speaking");
           alexPresenceText.textContent = alexProjects.length
             ? `${alexProjects.length} saved ${alexProjects.length === 1 ? "project" : "projects"}`
             : "Ready to help you make progress.";
           alexSpeakButton.textContent = alexSpeechButtonLabel;
+          alexSpeakButton.setAttribute("aria-label", alexSpeechButtonLabel);
           alexSpeakButton.disabled = false;
         };
         utterance.onerror = (event) => {
           if (speechSequence !== alexSpeechSequence) return;
-          alexOrb.classList.remove("is-speaking");
-          alexStatus.textContent = "Ready";
+          alexSpeechActive = false;
+          setAlexSpeaking(false);
+          alexSpeakButton.classList.remove("is-speaking");
           alexPresenceText.textContent = event.error === "not-allowed"
             ? `Your browser blocked speech. Select ${alexSpeechButtonLabel} to try again.`
             : "Speech could not play. The message is still available to read.";
           alexSpeakButton.textContent = alexSpeechButtonLabel;
+          alexSpeakButton.setAttribute("aria-label", alexSpeechButtonLabel);
           alexSpeakButton.disabled = false;
         };
 
-        alexSpeakButton.disabled = true;
-        alexSpeakButton.textContent = "Speaking...";
+        alexSpeakButton.classList.add("is-speaking");
+        alexSpeakButton.textContent = "Cancel speech";
+        alexSpeakButton.setAttribute("aria-label", "Cancel speech");
         alexGreetingSpoken = true;
         window.speechSynthesis.speak(utterance);
       }
@@ -763,7 +970,13 @@
       }
 
       alexGreetingTimer = window.setTimeout(tryAlexAutoGreeting, 10000);
-      alexSpeakButton.addEventListener("click", speakAlexGreeting);
+      alexSpeakButton.addEventListener("click", () => {
+        if (alexSpeechActive) {
+          stopAlexSpeech();
+          return;
+        }
+        speakAlexGreeting();
+      });
       newProjectButton.addEventListener("click", cancelAlexAutoGreeting, true);
       projectsList.addEventListener("click", cancelAlexAutoGreeting, true);
       alexCommandInput.addEventListener("input", cancelAlexAutoGreeting, { once: true });
@@ -856,6 +1069,7 @@
       alexCommandForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         cancelAlexAutoGreeting();
+        if (alexSpeechActive) stopAlexSpeech();
         if (alexListening) {
           alexRecognition.stop();
           alexVoiceStatus.textContent = "Stopping microphone… review the transcript, then press Send.";
@@ -953,9 +1167,12 @@
       }
 
       function showAlexResponse(message, items = []) {
+        if (alexSpeechActive) stopAlexSpeech();
         alexMessageText.textContent = message;
         alexSpeechButtonLabel = "Play response";
         alexSpeakButton.textContent = alexSpeechButtonLabel;
+        alexSpeakButton.setAttribute("aria-label", alexSpeechButtonLabel);
+        alexSpeakButton.classList.remove("is-speaking");
         alexProjectList.replaceChildren();
         items.forEach((text) => {
           const item = document.createElement("li");
