@@ -361,6 +361,7 @@ app.post("/api/alex/interpret", requireAuth, async (req, res) => {
     "suggest_next",
     "delete_project",
     "clarify",
+    "help",
     "unsupported"
   ];
   const schema = {
@@ -381,7 +382,7 @@ app.post("/api/alex/interpret", requireAuth, async (req, res) => {
   const systemInstruction = [
     "You translate a user's request into one supported project/task action. Never perform actions, invent account data, claim a change happened, or request private information.",
     "Return only the required structured fields. Put missing information or an unsupported request in reply and use action clarify or unsupported.",
-    "Supported actions: list_projects; create_project (needs project_name); show_project (needs project_name); update_project (needs project_name, field=status|priority|due date|description, value); add_task (needs project_name and task_title); update_task (needs task_title, field=status|priority|due date|notes, value); suggest_next; delete_project (needs project_name).",
+    "Supported actions: help; list_projects; create_project (needs project_name); show_project (needs project_name); update_project (needs project_name, field=status|priority|due date|description, value); add_task (needs project_name and task_title); update_task (needs task_title, field=status|priority|due date|notes, value); suggest_next; delete_project (needs project_name).",
     "For update_project status, value must be Planning, In progress, On hold, or Completed. For task status use Not started, In progress, or Done. Priorities are Low, Medium, High.",
     "Dates must be normalized to YYYY-MM-DD when the user gives an unambiguous date; otherwise ask for clarification. Use value=clear only when the user explicitly wants to remove a date.",
     "If an action needs a missing project name, task title, field, or value, use action clarify and ask one concise question.",
@@ -508,6 +509,10 @@ app.post("/api/alex/interpret", requireAuth, async (req, res) => {
       case "suggest_next":
         command = "what should I work on next";
         break;
+      case "help":
+        return res.json({
+          reply: "I can list or show your projects, create or update a project, add or update tasks, suggest what to work on next, and delete a project after confirmation. What would you like to do?"
+        });
       case "delete_project":
         if (!projectName) {
           return res.json({ reply: reply || "Which project do you want to delete?" });
@@ -515,8 +520,11 @@ app.post("/api/alex/interpret", requireAuth, async (req, res) => {
         command = `delete project ${quote(projectName)}`;
         break;
       case "clarify":
+        return res.json({ reply: reply || "Could you tell me which project or task you mean?" });
       case "unsupported":
-        return res.json({ reply: reply || "Could you rephrase that as a project or task request?" });
+        return res.json({
+          reply: "I can help manage your projects and tasks, or suggest what to work on next. Try asking me to list projects, add a task, update a project, or help you choose a next task."
+        });
       default:
         return res.status(502).json({ message: "Alex returned an unsupported action. Please try again." });
     }
