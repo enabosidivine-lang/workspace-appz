@@ -282,6 +282,24 @@
         cursor: wait;
         opacity: 0.65;
       }
+      .alex-command-form .alex-mic-button {
+        min-width: 44px;
+        padding: 9px 12px;
+        border-color: rgba(52, 211, 233, 0.5);
+        background: rgba(8, 145, 178, 0.18);
+        font-size: 1rem;
+      }
+      .alex-command-form .alex-mic-button[aria-pressed="true"] {
+        border-color: #fb7185;
+        background: rgba(190, 24, 93, 0.28);
+        box-shadow: 0 0 14px rgba(244, 63, 94, 0.24);
+      }
+      .alex-voice-status {
+        min-height: 1.2em;
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 0.73rem;
+      }
       .alex-command-help {
         margin-top: 8px;
         color: var(--muted);
@@ -563,8 +581,10 @@
               <form class="alex-command-form" id="alexCommandForm">
                 <label class="sr-only" for="alexCommandInput">Type a command for Alex</label>
                 <input id="alexCommandInput" type="text" maxlength="500" placeholder="Ask Alex to manage a project..." autocomplete="off" required />
+                <button class="alex-mic-button" id="alexListenButton" type="button" aria-label="Start voice input" aria-pressed="false" title="Start voice input">🎙</button>
                 <button id="alexCommandSubmit" type="submit">Send</button>
               </form>
+              <p class="alex-voice-status" id="alexVoiceStatus" aria-live="polite">Voice is optional. Your browser may process microphone audio; review the transcript before sending.</p>
               <details class="alex-command-help">
                 <summary>See example commands</summary>
                 <ul>
@@ -630,6 +650,8 @@
       const alexCommandForm = document.getElementById("alexCommandForm");
       const alexCommandInput = document.getElementById("alexCommandInput");
       const alexCommandSubmit = document.getElementById("alexCommandSubmit");
+      const alexListenButton = document.getElementById("alexListenButton");
+      const alexVoiceStatus = document.getElementById("alexVoiceStatus");
       let alexUser = null;
       let alexProjects = [];
       let alexTasks = [];
@@ -639,6 +661,12 @@
       let alexGreetingSpoken = false;
       const alexGreetingDeadline = Date.now() + 10000;
       let alexGreetingTimer;
+      const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+      let alexRecognition = null;
+      let alexListening = false;
+      let alexVoiceBaseText = "";
+      let alexVoiceRecognized = false;
+      let alexVoiceError = "";
 
       function cancelAlexAutoGreeting() {
         if (alexGreetingSpoken || alexGreetingCancelled) return;
@@ -704,9 +732,100 @@
       newProjectButton.addEventListener("click", cancelAlexAutoGreeting, true);
       projectsList.addEventListener("click", cancelAlexAutoGreeting, true);
       alexCommandInput.addEventListener("input", cancelAlexAutoGreeting, { once: true });
+      if (SpeechRecognitionAPI) {
+        alexRecognition = new SpeechRecognitionAPI();
+        alexRecognition.lang = navigator.language || "en-US";
+        alexRecognition.continuous = false;
+        alexRecognition.interimResults = true;
+        alexRecognition.maxAlternatives = 1;
+
+        alexRecognition.onstart = () => {
+          alexListening = true;
+          alexStatus.textContent = "Listening";
+          alexVoiceStatus.textContent = "Listening… Speak a command, then review the transcript before sending.";
+          alexListenButton.textContent = "■";
+          alexListenButton.setAttribute("aria-label", "Stop voice input");
+          alexListenButton.title = "Stop voice input";
+          alexListenButton.setAttribute("aria-pressed", "true");
+        };
+
+        alexRecognition.onresult = (event) => {
+          let finalText = "";
+          let interimText = "";
+          for (let index = 0; index < event.results.length; index += 1) {
+            const transcript = event.results[index][0].transcript;
+            if (event.results[index].isFinal) {
+              finalText += transcript;
+            } else {
+              interimText += transcript;
+            }
+          }
+
+          const recognizedText = `${finalText}${interimText}`.trim();
+          alexVoiceRecognized = Boolean(recognizedText);
+          alexCommandInput.value = [alexVoiceBaseText, recognizedText].filter(Boolean).join(" ");
+          alexCommandInput.dispatchEvent(new Event("input", { bubbles: true }));
+        };
+
+        alexRecognition.onerror = (event) => {
+          const errors = {
+            "not-allowed": "Microphone permission was denied. Allow microphone access in your browser settings to use voice input.",
+            "service-not-allowed": "The browser’s speech recognition service is unavailable.",
+            "no-speech": "I didn’t hear speech. Select the microphone and try again.",
+            "audio-capture": "No microphone is available. Check that one is connected and enabled.",
+            network: "Speech recognition had a network error. Check your connection and try again."
+          };
+          alexVoiceError = errors[event.error] || "Voice recognition stopped unexpectedly. You can type your command instead.";
+          alexVoiceStatus.textContent = alexVoiceError;
+        };
+
+        alexRecognition.onend = () => {
+          alexListening = false;
+          alexStatus.textContent = "Ready";
+          alexListenButton.textContent = "🎙";
+          alexListenButton.setAttribute("aria-label", "Start voice input");
+          alexListenButton.title = "Start voice input";
+          alexListenButton.setAttribute("aria-pressed", "false");
+          if (alexVoiceRecognized) {
+            alexVoiceStatus.textContent = "Transcript ready. Review it, edit if needed, then press Send.";
+            alexCommandInput.focus();
+          } else if (!alexVoiceError) {
+            alexVoiceStatus.textContent = "No speech was captured. You can try the microphone again or type a command.";
+          }
+        };
+
+        alexListenButton.addEventListener("click", () => {
+          cancelAlexAutoGreeting();
+          if (alexListening) {
+            alexRecognition.stop();
+            return;
+          }
+
+          alexVoiceBaseText = alexCommandInput.value.trim();
+          alexVoiceRecognized = false;
+          alexVoiceError = "";
+          alexVoiceStatus.textContent = "Starting microphone…";
+          try {
+            alexRecognition.start();
+          } catch (error) {
+            console.error("Could not start Alex voice input:", error);
+            alexVoiceStatus.textContent = "Could not start voice input. Wait a moment and try again, or type your command.";
+          }
+        });
+      } else {
+        alexListenButton.disabled = true;
+        alexListenButton.title = "Voice input is not supported in this browser";
+        alexVoiceStatus.textContent = "Voice input isn’t supported in this browser. You can still type commands.";
+      }
+
       alexCommandForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         cancelAlexAutoGreeting();
+        if (alexListening) {
+          alexRecognition.stop();
+          alexVoiceStatus.textContent = "Stopping microphone… review the transcript, then press Send.";
+          return;
+        }
         const command = alexCommandInput.value.trim();
         if (!command) return;
 
