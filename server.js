@@ -414,6 +414,7 @@ app.post("/api/alex/interpret", requireAuth, async (req, res) => {
     "If the user asks for unrelated conversation or an unsupported action, use action unsupported and respond briefly."
   ].join(" ");
 
+  const geminiRequestStartedAt = Date.now();
   try {
     const model = (process.env.GEMINI_MODEL || "gemini-3.8-flash")
       .trim()
@@ -603,6 +604,7 @@ app.post("/api/alex/interpret", requireAuth, async (req, res) => {
     return res.json({ command });
   } catch (error) {
     if (error.name === "TimeoutError" || error.name === "AbortError") {
+      console.warn(`Gemini API request timed out after ${Date.now() - geminiRequestStartedAt} ms.`);
       return res.status(504).json({ message: "Alex’s AI service took too long to respond. Please try again." });
     }
     console.error("Could not contact the Gemini API.");
