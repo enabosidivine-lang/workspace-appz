@@ -878,6 +878,9 @@
       let alexVoiceRecognized = false;
       let alexVoiceError = "";
       let alexPendingClarification = null;
+      let alexPendingConfirmation = null;
+      let alexRecognitionPurpose = "command";
+      let startAlexListening = () => false;
       let alexActiveUserRequest = "";
 
       function clearAlexClarification() {
@@ -894,6 +897,10 @@
       }
 
       alexStartOverButton.addEventListener("click", () => {
+        if (alexPendingConfirmation) {
+          alexPendingConfirmation.resolve(false);
+          alexPendingConfirmation = null;
+        }
         clearAlexClarification();
         alexCommandInput.value = "";
         alexVoiceStatus.textContent = "Follow-up cleared. You can start a new request.";
@@ -910,6 +917,48 @@
         alexOrb.classList.toggle("is-speaking", isSpeaking);
         alexStatus.classList.toggle("is-speaking", isSpeaking);
         alexStatus.textContent = isSpeaking ? "Speaking" : "Ready";
+      }
+
+      function confirmAlexAction(message) {
+        if (!alexConversationMode.checked) {
+          return Promise.resolve(window.confirm(message));
+        }
+
+        return new Promise((resolve) => {
+          alexPendingConfirmation = { resolve };
+          alexCommandInput.placeholder = "Say yes or no...";
+          alexFollowUpText.textContent = "Confirmation needed: say yes to proceed or no to cancel.";
+          alexFollowUp.hidden = false;
+          alexVoiceStatus.textContent = SpeechRecognitionAPI
+            ? "Alex is asking for confirmation. Say yes or no after Alex finishes speaking, or use the microphone button."
+            : "Alex is asking for confirmation. Type yes or no and press Send; voice recognition is not available in this browser.";
+          showAlexResponse(`${message} Say yes to confirm, or no to cancel.`);
+        });
+      }
+
+      function handleAlexConfirmationReply(reply) {
+        if (!alexPendingConfirmation) return false;
+        const normalizedReply = reply.trim().toLocaleLowerCase().replace(/[.!?]+$/, "").trim();
+        const affirmative = new Set(["yes", "yeah", "yep", "confirm", "do it"]);
+        const negative = new Set(["no", "nope", "cancel", "don't", "dont"]);
+        if (affirmative.has(normalizedReply)) {
+          const { resolve } = alexPendingConfirmation;
+          alexPendingConfirmation = null;
+          clearAlexClarification();
+          resolve(true);
+          return true;
+        }
+        if (negative.has(normalizedReply)) {
+          const { resolve } = alexPendingConfirmation;
+          alexPendingConfirmation = null;
+          clearAlexClarification();
+          resolve(false);
+          return true;
+        }
+
+        alexVoiceStatus.textContent = "Please answer only yes to confirm or no to cancel.";
+        showAlexResponse("I didn’t catch a clear yes or no. Please say yes to confirm, or no to cancel.");
+        return true;
       }
 
       function stopAlexSpeech() {
@@ -964,7 +1013,7 @@
 
       alexConversationMode.addEventListener("change", () => {
         if (alexConversationMode.checked) {
-          alexVoiceStatus.textContent = "Voice conversation mode is on. After you stop speaking, Alex will send the recognized command to Gemini and read the reply aloud. Project changes and deletions still require your confirmation.";
+          alexVoiceStatus.textContent = "Voice conversation mode is on. Alex will speak replies and ask for a spoken yes or no before making project changes or deleting anything.";
         } else {
           alexVoiceStatus.textContent = "Voice conversation mode is off. Review voice transcripts and press Send; choose Play response if you want Alex to speak.";
         }
@@ -1017,6 +1066,10 @@
           alexSpeakButton.textContent = alexSpeechButtonLabel;
           alexSpeakButton.setAttribute("aria-label", alexSpeechButtonLabel);
           alexSpeakButton.disabled = false;
+          if (alexPendingConfirmation && alexConversationMode.checked && SpeechRecognitionAPI) {
+            alexVoiceStatus.textContent = "Listening for your yes or no…";
+            startAlexListening("confirmation");
+          }
         };
         utterance.onerror = (event) => {
           if (speechSequence !== alexSpeechSequence) return;
@@ -1073,8 +1126,10 @@
 
         alexRecognition.onstart = () => {
           alexListening = true;
-          alexStatus.textContent = "Listening";
-          alexVoiceStatus.textContent = "Listening… Speak a command, then review the transcript before sending.";
+          alexStatus.textContent = alexRecognitionPurpose === "confirmation" ? "Confirm?" : "Listening";
+          alexVoiceStatus.textContent = alexRecognitionPurpose === "confirmation"
+            ? "Listening for a clear yes or no…"
+            : "Listening… Speak a command, then review the transcript before sending.";
           alexListenButton.textContent = "■";
           alexListenButton.setAttribute("aria-label", "Stop voice input");
           alexListenButton.title = "Stop voice input";
@@ -1095,7 +1150,9 @@
 
           const recognizedText = `${finalText}${interimText}`.trim();
           alexVoiceRecognized = Boolean(recognizedText);
-          alexCommandInput.value = [alexVoiceBaseText, recognizedText].filter(Boolean).join(" ");
+          alexCommandInput.value = alexRecognitionPurpose === "confirmation"
+            ? recognizedText
+            : [alexVoiceBaseText, recognizedText].filter(Boolean).join(" ");
           alexCommandInput.dispatchEvent(new Event("input", { bubbles: true }));
         };
 
@@ -1119,7 +1176,10 @@
           alexListenButton.title = "Start voice input";
           alexListenButton.setAttribute("aria-pressed", "false");
           if (alexVoiceRecognized) {
-            if (alexConversationMode.checked && !alexVoiceError) {
+            if (alexRecognitionPurpose === "confirmation" && !alexVoiceError) {
+              handleAlexConfirmationReply(alexCommandInput.value);
+              alexCommandInput.value = "";
+            } else if (alexConversationMode.checked && !alexVoiceError) {
               alexVoiceStatus.textContent = "Sending your recognized command to Alex…";
               alexCommandForm.requestSubmit(alexCommandSubmit);
             } else {
@@ -1131,6 +1191,27 @@
           }
         };
 
+        startAlexListening = (purpose = "command") => {
+          if (alexListening) return false;
+          alexRecognitionPurpose = purpose;
+          alexVoiceBaseText = purpose === "confirmation" ? "" : alexCommandInput.value.trim();
+          alexVoiceRecognized = false;
+          alexVoiceError = "";
+          alexVoiceStatus.textContent = purpose === "confirmation"
+            ? "Starting microphone for your yes or no…"
+            : "Starting microphone…";
+          try {
+            alexRecognition.start();
+            return true;
+          } catch (error) {
+            console.warn("Could not start Alex voice input:", error);
+            alexVoiceStatus.textContent = purpose === "confirmation"
+              ? "The microphone didn’t start. Tap it and say yes or no, or type your answer."
+              : "Could not start voice input. Wait a moment and try again, or type a command.";
+            return false;
+          }
+        };
+
         alexListenButton.addEventListener("click", () => {
           cancelAlexAutoGreeting();
           if (alexListening) {
@@ -1138,16 +1219,7 @@
             return;
           }
 
-          alexVoiceBaseText = alexCommandInput.value.trim();
-          alexVoiceRecognized = false;
-          alexVoiceError = "";
-          alexVoiceStatus.textContent = "Starting microphone…";
-          try {
-            alexRecognition.start();
-          } catch (error) {
-            console.error("Could not start Alex voice input:", error);
-            alexVoiceStatus.textContent = "Could not start voice input. Wait a moment and try again, or type your command.";
-          }
+          startAlexListening(alexPendingConfirmation ? "confirmation" : "command");
         });
       } else {
         alexListenButton.disabled = true;
@@ -1159,12 +1231,18 @@
         event.preventDefault();
         cancelAlexAutoGreeting();
         if (alexSpeechActive) stopAlexSpeech();
+        const command = alexCommandInput.value.trim();
+        if (alexPendingConfirmation && command) {
+          if (alexListening) alexRecognition.stop();
+          handleAlexConfirmationReply(command);
+          alexCommandInput.value = "";
+          return;
+        }
         if (alexListening) {
           alexRecognition.stop();
           alexVoiceStatus.textContent = "Stopping microphone… review the transcript, then press Send.";
           return;
         }
-        const command = alexCommandInput.value.trim();
         if (!command) return;
 
         alexActiveUserRequest = command;
@@ -1384,7 +1462,7 @@
             showAlexResponse("Project names must be 120 characters or fewer.");
             return;
           }
-          if (!window.confirm(`Create the project “${name}”?`)) {
+          if (!(await confirmAlexAction(`Create the project “${name}”?`))) {
             showAlexResponse("Okay, I haven’t created that project.");
             return;
           }
@@ -1406,7 +1484,7 @@
             showAlexClarification(explainNameMatch(result, requestedName, "project", (project) => project.name));
             return;
           }
-          if (!window.confirm(`Permanently delete “${result.item.name}” and all its tasks? This cannot be undone.`)) {
+          if (!(await confirmAlexAction(`Permanently delete “${result.item.name}” and all its tasks? This cannot be undone.`))) {
             showAlexResponse(`I kept “${result.item.name}”. Nothing was deleted.`);
             return;
           }
@@ -1458,7 +1536,7 @@
           }
 
           const fieldLabel = field.toLocaleLowerCase();
-          if (!window.confirm(`Set the ${fieldLabel} of “${project.name}” to “${value}”?`)) {
+          if (!(await confirmAlexAction(`Set the ${fieldLabel} of “${project.name}” to “${value}”?`))) {
             showAlexResponse("Okay, I haven’t changed the project.");
             return;
           }
@@ -1487,7 +1565,7 @@
             showAlexResponse("Task titles must be between 1 and 200 characters.");
             return;
           }
-          if (!window.confirm(`Add the task “${title}” to “${result.item.name}”?`)) {
+          if (!(await confirmAlexAction(`Add the task “${title}” to “${result.item.name}”?`))) {
             showAlexResponse("Okay, I haven’t added that task.");
             return;
           }
@@ -1547,7 +1625,7 @@
             body.notes = value;
           }
 
-          if (!window.confirm(`Update ${field.toLocaleLowerCase()} for task “${task.title}” in “${task.project_name}”?`)) {
+          if (!(await confirmAlexAction(`Update ${field.toLocaleLowerCase()} for task “${task.title}” in “${task.project_name}”?`))) {
             showAlexResponse("Okay, I haven’t changed the task.");
             return;
           }
