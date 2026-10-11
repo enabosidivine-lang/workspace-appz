@@ -359,6 +359,30 @@
         margin-top: 2px;
         accent-color: #a78bfa;
       }
+      .alex-follow-up {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 8px;
+        padding: 8px 10px;
+        border-left: 2px solid #a78bfa;
+        border-radius: 0 8px 8px 0;
+        background: rgba(109, 59, 232, 0.1);
+        color: #ddd6fe;
+        font-size: 0.75rem;
+      }
+      .alex-follow-up[hidden] { display: none; }
+      .alex-follow-up button {
+        flex: 0 0 auto;
+        padding: 5px 8px;
+        border: 1px solid rgba(196, 181, 253, 0.45);
+        border-radius: 7px;
+        background: transparent;
+        color: #ede9fe;
+        font: inherit;
+        cursor: pointer;
+      }
       .alex-command-form {
         display: flex;
         gap: 8px;
@@ -751,11 +775,15 @@
                 <button class="alex-mic-button" id="alexListenButton" type="button" aria-label="Start voice input" aria-pressed="false" title="Start voice input">🎙</button>
                 <button id="alexCommandSubmit" type="submit">Send</button>
               </form>
+              <div class="alex-follow-up" id="alexFollowUp" hidden>
+                <span id="alexFollowUpText">Alex is waiting for your answer.</span>
+                <button id="alexStartOverButton" type="button">Start a new request</button>
+              </div>
               <label class="alex-conversation-toggle" for="alexConversationMode">
                 <input id="alexConversationMode" type="checkbox" />
                 <span><strong>Voice conversation mode</strong><br />When enabled, Alex speaks replies, and recognized microphone commands are sent when you stop speaking. You can review or edit them instead when this is off.</span>
               </label>
-              <p class="alex-voice-status" id="alexVoiceStatus" aria-live="polite">Voice is optional. Your browser may process microphone audio. Commands sent to Alex, including names or details, go to Google Gemini for interpretation; saved project and task records are not sent automatically.</p>
+              <p class="alex-voice-status" id="alexVoiceStatus" aria-live="polite">Voice is optional. Your browser may process microphone audio. Commands sent to Alex, including names or details, go to Google Gemini for interpretation; saved project and task records are not sent automatically. If Alex asks a follow-up, the current request, Alex’s question, and your answer are sent together and kept only until the request is resolved or cleared.</p>
               <details class="alex-command-help">
                 <summary>See example commands</summary>
                 <ul>
@@ -828,6 +856,9 @@
       const alexListenButton = document.getElementById("alexListenButton");
       const alexVoiceStatus = document.getElementById("alexVoiceStatus");
       const alexConversationMode = document.getElementById("alexConversationMode");
+      const alexFollowUp = document.getElementById("alexFollowUp");
+      const alexFollowUpText = document.getElementById("alexFollowUpText");
+      const alexStartOverButton = document.getElementById("alexStartOverButton");
       let alexUser = null;
       let alexProjects = [];
       let alexTasks = [];
@@ -846,6 +877,28 @@
       let alexVoiceBaseText = "";
       let alexVoiceRecognized = false;
       let alexVoiceError = "";
+      let alexPendingClarification = null;
+      let alexActiveUserRequest = "";
+
+      function clearAlexClarification() {
+        alexPendingClarification = null;
+        alexFollowUp.hidden = true;
+        alexCommandInput.placeholder = "Ask Alex to manage a project...";
+      }
+
+      function setAlexClarification(originalRequest, question) {
+        alexPendingClarification = { originalRequest, question };
+        alexFollowUpText.textContent = question;
+        alexFollowUp.hidden = false;
+        alexCommandInput.placeholder = "Answer Alex’s question...";
+      }
+
+      alexStartOverButton.addEventListener("click", () => {
+        clearAlexClarification();
+        alexCommandInput.value = "";
+        alexVoiceStatus.textContent = "Follow-up cleared. You can start a new request.";
+        alexCommandInput.focus();
+      });
 
       function cancelAlexAutoGreeting() {
         if (alexGreetingSpoken || alexGreetingCancelled) return;
@@ -1114,17 +1167,31 @@
         const command = alexCommandInput.value.trim();
         if (!command) return;
 
+        alexActiveUserRequest = command;
         alexCommandSubmit.disabled = true;
         alexStatus.textContent = "Working";
         try {
+          const requestBody = { message: command };
+          if (alexPendingClarification) {
+            requestBody.clarification = alexPendingClarification;
+          }
           const { data: interpretation } = await apiRequest("/api/alex/interpret", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message: command })
+            body: JSON.stringify(requestBody)
           });
           if (typeof interpretation.reply === "string" && interpretation.reply) {
+            if (interpretation.needsClarification === true) {
+              setAlexClarification(
+                alexPendingClarification?.originalRequest || command,
+                interpretation.reply
+              );
+            } else {
+              clearAlexClarification();
+            }
             showAlexResponse(interpretation.reply);
           } else if (typeof interpretation.command === "string" && interpretation.command) {
+            clearAlexClarification();
             await executeAlexCommand(interpretation.command);
           } else {
             throw new Error("Alex couldn’t interpret that request. Please try another phrasing.");
@@ -1137,6 +1204,7 @@
           alexStatus.textContent = "Ready";
           alexCommandInput.value = "";
           alexCommandInput.focus();
+          alexActiveUserRequest = "";
         }
       });
 
@@ -1219,6 +1287,11 @@
         if (alexConversationMode.checked) {
           speakAlexGreeting();
         }
+      }
+
+      function showAlexClarification(message) {
+        setAlexClarification(alexActiveUserRequest, message);
+        showAlexResponse(message);
       }
 
       function cleanCommandName(value) {
@@ -1330,7 +1403,7 @@
           const requestedName = cleanCommandName(deleteProjectMatch[1]);
           const result = findNamedItem(alexProjects, requestedName, (project) => project.name);
           if (!result.item) {
-            showAlexResponse(explainNameMatch(result, requestedName, "project", (project) => project.name));
+            showAlexClarification(explainNameMatch(result, requestedName, "project", (project) => project.name));
             return;
           }
           if (!window.confirm(`Permanently delete “${result.item.name}” and all its tasks? This cannot be undone.`)) {
@@ -1350,7 +1423,7 @@
           const [, field, requestedName, rawValue] = updateProjectMatch;
           const result = findNamedItem(alexProjects, requestedName, (project) => project.name);
           if (!result.item) {
-            showAlexResponse(explainNameMatch(result, requestedName, "project", (project) => project.name));
+            showAlexClarification(explainNameMatch(result, requestedName, "project", (project) => project.name));
             return;
           }
           const project = result.item;
@@ -1407,7 +1480,7 @@
           const requestedProject = cleanCommandName(addTaskMatch[2]);
           const result = findNamedItem(alexProjects, requestedProject, (project) => project.name);
           if (!result.item) {
-            showAlexResponse(explainNameMatch(result, requestedProject, "project", (project) => project.name));
+            showAlexClarification(explainNameMatch(result, requestedProject, "project", (project) => project.name));
             return;
           }
           if (!title || title.length > 200) {
@@ -1437,7 +1510,7 @@
           const requestedTitle = cleanCommandName(markTaskMatch ? taskMatch[1] : taskMatch[2]);
           const result = findNamedItem(alexTasks, requestedTitle, (task) => task.title);
           if (!result.item) {
-            showAlexResponse(explainNameMatch(result, requestedTitle, "task", (task) => task.title));
+            showAlexClarification(explainNameMatch(result, requestedTitle, "task", (task) => task.title));
             return;
           }
           const task = result.item;
@@ -1493,7 +1566,7 @@
           const requestedName = cleanCommandName(detailsMatch[1]);
           const result = findNamedItem(alexProjects, requestedName, (project) => project.name);
           if (!result.item) {
-            showAlexResponse(explainNameMatch(result, requestedName, "project", (project) => project.name));
+            showAlexClarification(explainNameMatch(result, requestedName, "project", (project) => project.name));
             return;
           }
           const project = result.item;
